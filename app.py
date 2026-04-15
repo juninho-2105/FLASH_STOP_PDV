@@ -5,11 +5,11 @@ from datetime import datetime
 import time
 
 # ==================== CONFIGURAÇÃO ====================
-st.set_page_config(page_title="Flash Stop Pro v3.7", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Flash Stop Pro v3.9", layout="wide", page_icon="⚡")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Função para renderizar o nome FLASH STOP estilizado
+# Função para renderizar a marca FLASH STOP estilizada
 def render_flash_stop_logo(font_size="42px"):
     st.markdown(f"""
         <div style="text-align: center; margin-bottom: 20px;">
@@ -26,7 +26,7 @@ def carregar_aba(nome_aba):
     try:
         df = conn.read(worksheet=nome_aba)
         return df.dropna(how='all')
-    except:
+    except Exception:
         return pd.DataFrame()
 
 # --- LOGIN ---
@@ -61,8 +61,8 @@ if menu == "📊 Dashboard & Alertas":
     st.header("📊 Painel de Controle")
     produtos = carregar_aba("produtos")
     
-    if produtos.empty:
-        st.info("💡 Cadastre produtos na aba 'Gestão de Estoque' para ver os alertas.")
+    if produtos.empty or 'nome' not in produtos.columns:
+        st.info("💡 Cadastre produtos com a coluna 'nome' para ativar alertas.")
     else:
         col1, col2 = st.columns(2)
         with col1:
@@ -86,23 +86,6 @@ elif menu == "📦 Gestão de Estoque":
     st.header("📦 Gestão de Estoque")
     df_estoque = carregar_aba("produtos")
 
-    # Verifica se a tabela não está vazia e se tem a coluna 'nome'
-    if not df_estoque.empty and 'nome' in df_estoque.columns:
-        st.subheader("📋 Estoque Atual")
-        st.dataframe(df_estoque, use_container_width=True)
-
-        with st.expander("🗑️ Excluir Produto"):
-            # O .tolist() agora só roda se a coluna existir
-            lista_prods = df_estoque['nome'].dropna().unique().tolist()
-            prod_del = st.selectbox("Selecione para remover", lista_prods)
-            if st.button("Confirmar Exclusão"):
-                conn.update(worksheet="produtos", data=df_estoque[df_estoque['nome'] != prod_del])
-                st.warning(f"{prod_del} removido.")
-                st.rerun()
-    else:
-        st.error("⚠️ Erro: A coluna 'nome' não foi encontrada ou a aba está vazia.")
-        st.info("Certifique-se de que a primeira linha da aba 'produtos' tenha o cabeçalho: nome")
-
     with st.expander("➕ Adicionar Novo Produto"):
         with st.form("novo_p"):
             n = st.text_input("Nome do Produto")
@@ -110,44 +93,49 @@ elif menu == "📦 Gestão de Estoque":
             v = st.text_input("Validade (DD/MM/AAAA)")
             p = st.number_input("Preço de Venda")
             if st.form_submit_button("Salvar Produto"):
-                # Cria o DataFrame garantindo as colunas certas
                 novo = pd.DataFrame([{"nome": n, "estoque": e, "validade": v, "preco": p}])
-                # Se o df original estiver vazio, usamos apenas o novo
-                atualizado = pd.concat([df_estoque, novo], ignore_index=True) if not df_estoque.empty else novo
-                conn.update(worksheet="produtos", data=atualizado)
+                conn.update(worksheet="produtos", data=pd.concat([df_estoque, novo], ignore_index=True))
                 st.success("Produto cadastrado!")
                 st.rerun()
 
-# ==================== 3. MÁQUINAS (COM VÍNCULO AO PDV) ====================
+    if not df_estoque.empty and 'nome' in df_estoque.columns:
+        st.subheader("📋 Estoque Atual")
+        st.dataframe(df_estoque, use_container_width=True)
+        with st.expander("🗑️ Excluir Produto"):
+            prod_del = st.selectbox("Selecione para remover", df_estoque['nome'].tolist())
+            if st.button("Confirmar Exclusão de Produto"):
+                conn.update(worksheet="produtos", data=df_estoque[df_estoque['nome'] != prod_del])
+                st.warning(f"{prod_del} removido.")
+                st.rerun()
+
+# ==================== 3. MÁQUINAS (VÍNCULO AO PDV) ====================
 elif menu == "📟 Máquinas (Automação)":
     st.header("📟 Máquinas de Cartão")
     df_maqs = carregar_aba("maquinas")
     df_pdvs = carregar_aba("pontos")
 
-    if df_pdvs.empty:
-        st.warning("⚠️ Cadastre um PDV antes de adicionar máquinas.")
+    if df_pdvs.empty or 'nome' not in df_pdvs.columns:
+        st.warning("⚠️ Cadastre um PDV primeiro.")
     else:
         with st.expander("➕ Vincular Nova Máquina"):
             with st.form("nova_m"):
                 n = st.text_input("Nome da Máquina")
                 tid = st.text_input("Serial (TID)")
                 pdv_v = st.selectbox("Vincular ao PDV:", df_pdvs['nome'].tolist())
-                if st.form_submit_button("Cadastrar e Vincular"):
+                if st.form_submit_button("Cadastrar Máquina"):
                     nova = pd.DataFrame([{"nome": n, "tid": tid, "pdv_vinculado": pdv_v}])
                     conn.update(worksheet="maquinas", data=pd.concat([df_maqs, nova], ignore_index=True))
-                    st.success(f"Máquina {n} ligada ao {pdv_v}!")
+                    st.success("Máquina vinculada!")
                     st.rerun()
 
-    st.subheader("📋 Máquinas Ativas")
-    st.dataframe(df_maqs, use_container_width=True)
-
-    if not df_maqs.empty:
-        with st.expander("🗑️ Remover Máquina"):
-            maq_del = st.selectbox("Remover Máquina", df_maqs['nome'].tolist())
-            if st.button("Confirmar Remoção"):
-                conn.update(worksheet="maquinas", data=df_maqs[df_maqs['nome'] != maq_del])
-                st.warning("Máquina removida.")
-                st.rerun()
+    if not df_maqs.empty and 'nome' in df_maqs.columns:
+        st.subheader("📋 Máquinas Ativas")
+        st.dataframe(df_maqs, use_container_width=True)
+        if st.button("🗑️ Remover Máquina Selecionada"):
+            # Exemplo simplificado de remoção por seleção rápida
+            maq_del = st.selectbox("Selecione para remover", df_maqs['nome'].tolist(), key="del_maq")
+            conn.update(worksheet="maquinas", data=df_maqs[df_maqs['nome'] != maq_del])
+            st.rerun()
 
 # ==================== 4. VENDA PDV ====================
 elif menu == "🛍️ Venda (PDV)":
@@ -156,21 +144,25 @@ elif menu == "🛍️ Venda (PDV)":
     prods = carregar_aba("produtos")
     maqs = carregar_aba("maquinas")
     
-    if pdvs.empty or prods.empty:
-        st.warning("⚠️ Configure PDVs e Estoque antes de vender!")
+    if pdvs.empty or prods.empty or 'nome' not in pdvs.columns or 'nome' not in prods.columns:
+        st.warning("⚠️ Configure PDVs e Estoque primeiro!")
     else:
         with st.form("venda_f"):
             pdv_sel = st.selectbox("📍 Selecione o PDV", pdvs['nome'].tolist())
-            maqs_pdv = maqs[maqs['pdv_vinculado'] == pdv_sel]['nome'].tolist()
+            
+            # Filtro de máquinas vinculadas
+            maqs_pdv = []
+            if not maqs.empty and 'pdv_vinculado' in maqs.columns:
+                maqs_pdv = maqs[maqs['pdv_vinculado'] == pdv_sel]['nome'].tolist()
+            
             maq_sel = st.selectbox("📟 Máquina de Cartão", maqs_pdv if maqs_pdv else ["Nenhuma máquina vinculada"])
             prod_sel = st.selectbox("📦 Item", prods['nome'].tolist())
             qtd = st.number_input("Quantidade", min_value=1, value=1)
-            forma = st.selectbox("Forma de Pagto", ["Cartão", "Pix", "Dinheiro"])
             
             if st.form_submit_button("FINALIZAR VENDA"):
                 idx = prods[prods['nome'] == prod_sel].index[0]
                 if int(prods.at[idx, 'estoque']) >= qtd:
-                    v_df = pd.DataFrame([{"data": datetime.now().strftime("%d/%m/%Y %H:%M"), "pdv": pdv_sel, "maquina": maq_sel, "produto": prod_sel, "valor": float(prods.at[idx, 'preco']) * qtd, "forma": forma}])
+                    v_df = pd.DataFrame([{"data": datetime.now().strftime("%d/%m/%Y %H:%M"), "pdv": pdv_sel, "maquina": maq_sel, "produto": prod_sel, "valor": float(prods.at[idx, 'preco']) * qtd}])
                     conn.update(worksheet="vendas", data=pd.concat([carregar_aba("vendas"), v_df], ignore_index=True))
                     prods.at[idx, 'estoque'] = int(prods.at[idx, 'estoque']) - qtd
                     conn.update(worksheet="produtos", data=prods)
@@ -178,24 +170,33 @@ elif menu == "🛍️ Venda (PDV)":
                     st.balloons()
                 else: st.error("Estoque insuficiente!")
 
-# ==================== 5. RELATÓRIOS E PDV ====================
+# ==================== 5. CADASTRAR PDV ====================
+elif menu == "📍 Cadastrar PDV":
+    st.header("📍 Gestão de Pontos")
+    df_pdvs = carregar_aba("pontos")
+    
+    with st.form("p"):
+        n = st.text_input("Nome do PDV")
+        if st.form_submit_button("Salvar PDV"):
+            if n:
+                novo = pd.DataFrame([{"nome": n}])
+                conn.update(worksheet="pontos", data=pd.concat([df_pdvs, novo], ignore_index=True))
+                st.success("PDV Cadastrado!")
+                st.rerun()
+    
+    if not df_pdvs.empty and 'nome' in df_pdvs.columns:
+        st.dataframe(df_pdvs)
+        with st.expander("🗑️ Excluir PDV"):
+            pdv_del = st.selectbox("Remover unidade", df_pdvs['nome'].tolist())
+            if st.button("Confirmar Exclusão de PDV"):
+                conn.update(worksheet="pontos", data=df_pdvs[df_pdvs['nome'] != pdv_del])
+                st.rerun()
+
+# ==================== 6. RELATÓRIOS ====================
 elif menu == "📋 Relatórios Contábeis":
     st.header("📋 Relatórios")
     vendas = carregar_aba("vendas")
     if not vendas.empty:
-        pdv_f = st.selectbox("Filtrar Unidade", ["Todos"] + vendas['pdv'].unique().tolist())
-        df = vendas if pdv_f == "Todos" else vendas[vendas['pdv'] == pdv_f]
-        st.metric("Total Bruto", f"R$ {pd.to_numeric(df['valor']).sum():.2f}")
-        st.dataframe(df)
-    else: st.info("Sem vendas.")
-
-elif menu == "📍 Cadastrar PDV":
-    st.header("📍 Gestão de Pontos")
-    df_pdvs = carregar_aba("pontos")
-    with st.form("p"):
-        n = st.text_input("Nome do PDV")
-        if st.form_submit_button("Salvar PDV"):
-            conn.update(worksheet="pontos", data=pd.concat([df_pdvs, pd.DataFrame([{"nome": n}])], ignore_index=True))
-            st.success("Cadastrado!")
-            st.rerun()
-    st.dataframe(df_pdvs)
+        st.metric("Faturamento Total", f"R$ {pd.to_numeric(vendas['valor'], errors='coerce').sum():.2f}")
+        st.dataframe(vendas)
+    else: st.info("Sem vendas registradas.")
