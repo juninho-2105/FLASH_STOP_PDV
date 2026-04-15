@@ -86,6 +86,23 @@ elif menu == "📦 Gestão de Estoque":
     st.header("📦 Gestão de Estoque")
     df_estoque = carregar_aba("produtos")
 
+    # Verifica se a tabela não está vazia e se tem a coluna 'nome'
+    if not df_estoque.empty and 'nome' in df_estoque.columns:
+        st.subheader("📋 Estoque Atual")
+        st.dataframe(df_estoque, use_container_width=True)
+
+        with st.expander("🗑️ Excluir Produto"):
+            # O .tolist() agora só roda se a coluna existir
+            lista_prods = df_estoque['nome'].dropna().unique().tolist()
+            prod_del = st.selectbox("Selecione para remover", lista_prods)
+            if st.button("Confirmar Exclusão"):
+                conn.update(worksheet="produtos", data=df_estoque[df_estoque['nome'] != prod_del])
+                st.warning(f"{prod_del} removido.")
+                st.rerun()
+    else:
+        st.error("⚠️ Erro: A coluna 'nome' não foi encontrada ou a aba está vazia.")
+        st.info("Certifique-se de que a primeira linha da aba 'produtos' tenha o cabeçalho: nome")
+
     with st.expander("➕ Adicionar Novo Produto"):
         with st.form("novo_p"):
             n = st.text_input("Nome do Produto")
@@ -93,20 +110,12 @@ elif menu == "📦 Gestão de Estoque":
             v = st.text_input("Validade (DD/MM/AAAA)")
             p = st.number_input("Preço de Venda")
             if st.form_submit_button("Salvar Produto"):
+                # Cria o DataFrame garantindo as colunas certas
                 novo = pd.DataFrame([{"nome": n, "estoque": e, "validade": v, "preco": p}])
-                conn.update(worksheet="produtos", data=pd.concat([df_estoque, novo], ignore_index=True))
+                # Se o df original estiver vazio, usamos apenas o novo
+                atualizado = pd.concat([df_estoque, novo], ignore_index=True) if not df_estoque.empty else novo
+                conn.update(worksheet="produtos", data=atualizado)
                 st.success("Produto cadastrado!")
-                st.rerun()
-
-    st.subheader("📋 Estoque Atual")
-    st.dataframe(df_estoque, use_container_width=True)
-
-    if not df_estoque.empty:
-        with st.expander("🗑️ Excluir Produto"):
-            prod_del = st.selectbox("Selecione para remover", df_estoque['nome'].tolist())
-            if st.button("Confirmar Exclusão"):
-                conn.update(worksheet="produtos", data=df_estoque[df_estoque['nome'] != prod_del])
-                st.warning(f"{prod_del} removido.")
                 st.rerun()
 
 # ==================== 3. MÁQUINAS (COM VÍNCULO AO PDV) ====================
