@@ -501,14 +501,66 @@ elif menu == "📂 Contabilidade":
     st.download_button("Baixar Relatório de Vendas (CSV)", df_v.to_csv(index=False), "vendas.csv")
     st.dataframe(df_v, use_container_width=True)
 
-# ==================== 10. CONFIGURAÇÕES ====================
+# ==================== 10. CONFIGURAÇÕES (PDVs E MÁQUINAS) ====================
 elif menu == "📟 Configurações":
-    st.header("📟 Gestão de PDVs")
-    df_pts = carregar_dinamico("pontos")
-    with st.form("novo_p"):
-        n = st.text_input("Nome da Unidade")
-        s = st.text_input("Senha")
-        if st.form_submit_button("Cadastrar"):
-            novo = pd.DataFrame([{"nome": n, "senha": s}])
-            conn.update(worksheet="pontos", data=pd.concat([df_pts, novo], ignore_index=True))
-            st.rerun()
+    st.header("📟 Gestão Operacional")
+    
+    aba_pdv, aba_maquinas = st.tabs(["📍 Pontos de Venda (PDVs)", "💳 Máquinas de Cartão"])
+
+    with aba_pdv:
+        st.subheader("Gestão de Acessos")
+        df_pts = carregar_dinamico("pontos")
+        
+        with st.form("novo_p"):
+            n = st.text_input("Nome da Unidade (ex: Condomínio Alpha)")
+            s = st.text_input("Senha de Acesso")
+            if st.form_submit_button("Cadastrar Unidade"):
+                if n and s:
+                    novo = pd.DataFrame([{"nome": n, "senha": s}])
+                    conn.update(worksheet="pontos", data=pd.concat([df_pts, novo], ignore_index=True))
+                    st.cache_data.clear()
+                    st.success("Unidade cadastrada!")
+                    st.rerun()
+        
+        st.dataframe(df_pts, use_container_width=True, hide_index=True)
+
+    with aba_maquinas:
+        st.subheader("Cadastro de Máquinas de Cartão")
+        st.info("Estas máquinas aparecerão como opção no fechamento do checkout.")
+        
+        # Carrega dados das máquinas (certifique-se de ter uma aba 'maquinas' no Sheets)
+        try:
+            df_maq = carregar_dinamico("maquinas")
+        except:
+            # Caso a aba não exista, cria um DataFrame vazio com as colunas necessárias
+            df_maq = pd.DataFrame(columns=["nome_maquina", "taxa_padrao", "status"])
+
+        with st.form("nova_maquina"):
+            c1, c2 = st.columns(2)
+            nome_m = c1.text_input("Nome/Modelo da Máquina:")
+            taxa_m = c2.number_input("Taxa de Operação (%)", min_value=0.0, max_value=10.0, value=2.99, step=0.01)
+            status_m = st.selectbox("Status Inicial:", ["Ativa", "Manutenção"])
+            
+            if st.form_submit_button("🚀 CADASTRAR MÁQUINA"):
+                if nome_m:
+                    nova_maq = pd.DataFrame([{
+                        "nome_maquina": nome_m, 
+                        "taxa_padrao": taxa_m, 
+                        "status": status_m
+                    }])
+                    df_maq_final = pd.concat([df_maq, nova_maq], ignore_index=True)
+                    conn.update(worksheet="maquinas", data=df_maq_final)
+                    st.cache_data.clear()
+                    st.success(f"Máquina {nome_m} integrada ao sistema!")
+                    time.sleep(1)
+                    st.rerun()
+
+        if not df_maq.empty:
+            st.divider()
+            st.write("### Máquinas Configuradas")
+            st.dataframe(df_maq, use_container_width=True, hide_index=True)
+            
+            if st.button("🗑️ Limpar Todas as Máquinas"):
+                conn.update(worksheet="maquinas", data=pd.DataFrame(columns=["nome_maquina", "taxa_padrao", "status"]))
+                st.cache_data.clear()
+                st.rerun()
