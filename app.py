@@ -364,25 +364,19 @@ elif menu == "💰 Entrada Mercadoria":
     except Exception as e:
         st.error(f"Erro na operação: {e}")
 
-# ==================== 7. INVENTÁRIO (CONFERÊNCIA) ====================
-elif menu == "📦 Inventário":
-    st.header("📦 Estoque Geral")
-    try:
-        df_p = carregar_dinamico("produtos")
-        # Exibição formatada
-        st.dataframe(
-            df_p[['nome', 'estoque', 'preco', 'estoque_minimo', 'validade']],
-            use_container_width=True,
-            hide_index=True
-        )
-    except Exception as e:
-        st.error(f"Erro ao carregar lista: {e}")
-
 # ==================== 7. INVENTÁRIO ====================
 elif menu == "📦 Inventário":
-    st.header("📦 Inventário Atual")
-    df_p = carregar_dinamico("produtos")
-    st.dataframe(df_p[['nome', 'estoque', 'preco', 'validade']], use_container_width=True)
+    st.header("📦 Gestão de Itens")
+    df_p = carregar("produtos")
+    st.dataframe(df_p, use_container_width=True)
+    if not df_p.empty:
+        with st.form("f_i"):
+            p_sel = st.selectbox("Ajustar Limite de:", df_p['nome'].tolist())
+            n_min = st.number_input("Novo Mínimo", min_value=0)
+            if st.form_submit_button("Salvar Limite"):
+                idx = df_p[df_p['nome'] == p_sel].index[0]
+                df_p.at[idx, 'estoque_minimo'] = n_min
+                conn.update(worksheet="produtos", data=df_p); st.success("Limite atualizado!"); st.rerun()
 
 # ==================== 8. CONTABILIDADE ====================
 elif menu == "📂 Contabilidade":
