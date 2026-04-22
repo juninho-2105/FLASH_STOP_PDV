@@ -71,9 +71,9 @@ if menu == "📊 Dashboard & Performance":
     
     # Cálculos Financeiros
     bruto = df_v['valor_bruto'].sum()
-    liq = df_v['valor_liquido'].sum() # Valor já sem as taxas das máquinas
-    gastos = df_d['valor'].sum()     # Custos fixos
-    cashback = bruto * 0.02          # 2% de Cashback sobre o faturamento total
+    liq = df_v['valor_liquido'].sum()
+    gastos = df_d['valor'].sum()
+    cashback = bruto * 0.02
     resultado = liq - gastos - cashback
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -87,12 +87,42 @@ if menu == "📊 Dashboard & Performance":
     
     # Gráfico de Evolução Mensal
     if not df_v.empty:
-        st.subheader("📈 Crescimento Mensal (Faturamento)")
+        st.subheader("📈 Crescimento Mensal")
         df_v['data_dt'] = pd.to_datetime(df_v['data'], dayfirst=True, errors='coerce')
         df_chart = df_v.dropna(subset=['data_dt']).set_index('data_dt').resample('M')['valor_bruto'].sum().reset_index()
         df_chart['Mês'] = df_chart['data_dt'].dt.strftime('%m/%Y')
         st.area_chart(df_chart.set_index('Mês')['valor_bruto'])
 
+    # --- BLOCO DE ALERTAS REINTEGRADO ---
+    st.divider()
+    col_a, col_b = st.columns(2)
+    
+    with col_a:
+        st.subheader("🚨 Reposição de Estoque")
+        baixo = df_p[df_p['estoque'] <= df_p['estoque_minimo']]
+        if not baixo.empty: 
+            st.warning(f"{len(baixo)} itens em nível crítico")
+            st.table(baixo[['nome', 'estoque']])
+        else: 
+            st.success("Estoque abastecido!")
+    
+    with col_b:
+        st.subheader("📅 Validade (Próximos 15 dias)")
+        hoje = datetime.now()
+        vencendo = []
+        for _, r in df_p.iterrows():
+            try:
+                # Converte para string e depois para data para evitar erros de tipo
+                dv = datetime.strptime(str(r['validade']), "%d/%m/%Y")
+                if dv <= hoje + timedelta(days=15):
+                    vencendo.append({"Produto": r['nome'], "Vencimento": r['validade']})
+            except: 
+                continue
+        if vencendo: 
+            st.error(f"{len(vencendo)} itens próximos ao vencimento")
+            st.table(vencendo)
+        else: 
+            st.success("Validades OK!")
 # ==================== 5. FRENTE DE CAIXA (PDV) ====================
 elif menu == "🛍️ Frente de Caixa (PDV)":
     st.header("🛍️ Registro de Venda")
