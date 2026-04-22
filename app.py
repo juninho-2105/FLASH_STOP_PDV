@@ -138,9 +138,8 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT (MODO TURBO - ANTI-ERRO QUOTA) ====================
+# ==================== 5. SELF-CHECKOUT (BIPOU + MANUAL) ====================
 elif menu == "🛒 Self-Checkout":
-    # 1. Saudação por horário
     hora_atual = datetime.now().hour
     if hora_atual < 12: saudacao = "Bom dia"
     elif hora_atual < 18: saudacao = "Boa tarde"
@@ -148,55 +147,75 @@ elif menu == "🛒 Self-Checkout":
 
     st.header(f"🛒 {saudacao}! Bem-vindo à Flash Stop")
     
-    # 2. Lógica de Cache para evitar erro 429 (Limite do Google)
-    # Definimos um tempo de vida (TTL) para a leitura não sobrecarregar o Google
     try:
-        # Usamos o cache para buscar produtos
+        # Busca produtos (usando o cache para evitar erro 429)
         df_p = carregar_dinamico("produtos")
         
         col_esq, col_dir = st.columns([1.2, 1.3])
 
         with col_esq:
-            st.subheader("Escaneie o Produto")
+            # Criamos duas abas para o cliente escolher o modo de entrada
+            aba_scan, aba_manual = st.tabs(["📟 BIPAR PRODUTO", "🔍 BUSCA MANUAL"])
+            
             prods_ativos = df_p[df_p['estoque'].astype(int) > 0]
             lista_nomes = [""] + prods_ativos['nome'].tolist()
-            
-            # Selectbox preparada para o leitor de código de barras
-            sel = st.selectbox("Aponte o leitor para o código:", lista_nomes, key="leitor_ba")
-            
-            if sel:
-                d = df_p[df_p['nome'] == sel].iloc[0]
-                preco_unit = float(d['preco'])
-                
-                # Agrupamento inteligente no carrinho
-                item_no_carrinho = False
-                for idx, item in enumerate(st.session_state.carrinho):
-                    if item['item'] == sel:
-                        st.session_state.carrinho[idx]['qtd'] += 1
-                        st.session_state.carrinho[idx]['total'] = st.session_state.carrinho[idx]['qtd'] * preco_unit
-                        item_no_carrinho = True
-                        break
-                
-                if not item_no_carrinho:
-                    st.session_state.carrinho.append({
-                        "item": sel, "qtd": 1, "preco": preco_unit, "total": preco_unit
-                    })
-                
-                st.toast(f"✅ {sel} adicionado!")
-                # Pequena pausa para o usuário ver o feedback antes do rerun
-                time.sleep(0.3)
-                st.rerun()
+
+            # --- MODO 1: SCANNER (BIPOU-ENTROU) ---
+            with aba_scan:
+                sel_scan = st.selectbox("Aponte o leitor:", lista_nomes, key="scan_input")
+                if sel_scan:
+                    d = df_p[df_p['nome'] == sel_scan].iloc[0]
+                    preco_unit = float(d['preco'])
+                    
+                    # Lógica de somar ao carrinho
+                    item_existente = False
+                    for idx, item in enumerate(st.session_state.carrinho):
+                        if item['item'] == sel_scan:
+                            st.session_state.carrinho[idx]['qtd'] += 1
+                            st.session_state.carrinho[idx]['total'] = st.session_state.carrinho[idx]['qtd'] * preco_unit
+                            item_existente = True
+                            break
+                    
+                    if not item_existente:
+                        st.session_state.carrinho.append({"item": sel_scan, "qtd": 1, "preco": preco_unit, "total": preco_unit})
+                    
+                    st.toast(f"✅ {sel_scan} adicionado!")
+                    time.sleep(0.3)
+                    st.rerun()
+
+            # --- MODO 2: MANUAL (PESQUISA + BOTÃO) ---
+            with aba_manual:
+                sel_man = st.selectbox("Procure o produto pelo nome:", lista_nomes, key="man_input")
+                if sel_man:
+                    d_man = df_p[df_p['nome'] == sel_man].iloc[0]
+                    st.write(f"Preço Unitário: **R$ {float(d_man['preco']):.2f}**")
+                    qtd_man = st.number_input("Quantidade:", min_value=1, max_value=int(d_man['estoque']), value=1, key="qtd_man")
+                    
+                    if st.button("➕ ADICIONAR MANUALMENTE", use_container_width=True):
+                        preco_unit_man = float(d_man['preco'])
+                        
+                        item_existente = False
+                        for idx, item in enumerate(st.session_state.carrinho):
+                            if item['item'] == sel_man:
+                                st.session_state.carrinho[idx]['qtd'] += qtd_man
+                                st.session_state.carrinho[idx]['total'] = st.session_state.carrinho[idx]['qtd'] * preco_unit_man
+                                item_existente = True
+                                break
+                        
+                        if not item_existente:
+                            st.session_state.carrinho.append({"item": sel_man, "qtd": qtd_man, "preco": preco_unit_man, "total": preco_unit_man * qtd_man})
+                        
+                        st.success(f"{sel_man} adicionado!")
+                        time.sleep(0.5)
+                        st.rerun()
 
         with col_dir:
             st.subheader("🛍️ Seu Carrinho")
             if st.session_state.carrinho:
                 v_total_compra = 0
-                
-                # Interface de ajuste de quantidades [+ / -]
                 for i, item in enumerate(st.session_state.carrinho):
                     v_total_compra += item['total']
                     c_nome, c_menos, c_qtd, c_mais = st.columns([3, 1, 1, 1])
-                    
                     c_nome.write(f"**{item['item']}**\n(R$ {item['preco']:.2f})")
                     
                     if c_menos.button("➖", key=f"min_{i}"):
@@ -206,22 +225,17 @@ elif menu == "🛒 Self-Checkout":
                         else:
                             st.session_state.carrinho.pop(i)
                         st.rerun()
-                        
                     c_qtd.write(f"**{item['qtd']}**")
-                    
                     if c_mais.button("➕", key=f"add_{i}"):
                         estoque_dis = int(df_p[df_p['nome'] == item['item']].iloc[0]['estoque'])
                         if item['qtd'] < estoque_dis:
                             st.session_state.carrinho[i]['qtd'] += 1
                             st.session_state.carrinho[i]['total'] = st.session_state.carrinho[i]['qtd'] * item['preco']
                             st.rerun()
-                        else:
-                            st.error("Sem estoque disponível")
 
                 st.divider()
                 st.markdown(f"## TOTAL: R$ {v_total_compra:.2f}")
 
-                # --- PAGAMENTO ---
                 st.subheader("💳 Pagamento")
                 forma = st.radio("Escolha a forma:", ["Pix", "Débito", "Crédito"], horizontal=True)
                 
@@ -232,46 +246,35 @@ elif menu == "🛒 Self-Checkout":
                         st.rerun()
                 with col_btn2:
                     if st.button("✅ FINALIZAR", type="primary", use_container_width=True):
-                        with st.spinner("Registrando..."):
+                        with st.spinner("Finalizando..."):
                             agora = datetime.now().strftime("%d/%m/%Y %H:%M")
                             v_novas = []
                             for it in st.session_state.carrinho:
-                                # Taxa fixa de 3% (ajustável conforme sua máquina)
                                 v_liq = it['total'] * 0.97 
                                 v_novas.append({
-                                    "data": agora, 
-                                    "pdv": st.session_state.unidade, 
-                                    "produto": it['item'],
-                                    "valor_bruto": it['total'], 
-                                    "valor_liquido": v_liq, 
-                                    "forma": forma
+                                    "data": agora, "pdv": st.session_state.unidade, "produto": it['item'],
+                                    "valor_bruto": it['total'], "valor_liquido": v_liq, "forma": forma
                                 })
-                                # Baixa de estoque
                                 idx_est = df_p[df_p['nome'] == it['item']].index[0]
                                 df_p.at[idx_est, 'estoque'] = int(df_p.at[idx_est, 'estoque']) - it['qtd']
                             
-                            # Envio dos dados para o Google
                             df_v_atual = carregar_dinamico("vendas")
                             conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(v_novas)], ignore_index=True))
                             conn.update(worksheet="produtos", data=df_p)
-                            
-                            # IMPORTANTE: Limpa o cache após o update para a próxima leitura ser real
                             st.cache_data.clear()
-                            
                             st.session_state.carrinho = []
-                            st.success("Pagamento confirmado! Obrigado por comprar na Flash Stop.")
+                            st.success("Obrigado!")
                             st.balloons()
                             time.sleep(3)
                             st.rerun()
             else:
-                st.info("Passe o produto no leitor para começar sua compra.")
+                st.info("Escolha uma opção ao lado para começar.")
     
     except Exception as e:
-        # Se der o erro de quota, avisamos de forma amigável
         if "429" in str(e):
-            st.warning("O sistema está processando muitos dados. Por favor, aguarde 10 segundos e tente bipar novamente.")
+            st.warning("Aguarde alguns segundos (limite de tráfego)...")
         else:
-            st.error(f"Erro no sistema: {e}")
+            st.error(f"Erro: {e}")
 
 # ==================== 6. ENTRADA MERCADORIA ====================
 elif menu == "💰 Entrada Mercadoria":
