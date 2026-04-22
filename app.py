@@ -54,16 +54,13 @@ st.sidebar.title("⚡ Flash Stop")
 st.sidebar.write(f"📍 **{st.session_state.unidade}**")
 
 if st.session_state.perfil == "admin":
+    # Adicionada a opção "💸 Despesas" na lista abaixo
     menu = st.sidebar.radio("Navegação", [
         "📊 Dashboard", "🛒 Self-Checkout", "💰 Entrada Mercadoria", 
-        "📦 Inventário", "📂 Contabilidade", "📟 Configurações"
+        "📦 Inventário", "💸 Despesas", "📂 Contabilidade", "📟 Configurações"
     ])
 else:
     menu = st.sidebar.radio("Navegação", ["🛒 Self-Checkout", "📦 Inventário"])
-
-if st.sidebar.button("Sair"):
-    st.session_state.autenticado = False
-    st.rerun()
 
 # ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
 if menu == "📊 Dashboard":
