@@ -276,60 +276,97 @@ elif menu == "🛒 Self-Checkout":
         else:
             st.error(f"Erro: {e}")
 
-# ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS) ====================
+# ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
 elif menu == "💸 Despesas":
     st.header("💸 Registro de Custos e Despesas")
-    
+    st.info("Lance aqui custos como aluguel, energia, reposição de estoque ou manutenção.")
+
     try:
         # Carrega a aba de despesas do Sheets
         df_d = carregar_dinamico("despesas")
         
-        col1, col2 = st.columns([1, 1.5])
+        # Layout em colunas: Esquerda para Cadastro, Direita para Histórico
+        col_cadastro, col_historico = st.columns([1, 1.5])
         
-        with col1:
-            st.subheader("Registrar Nova")
+        with col_cadastro:
+            st.subheader("Registrar Nova Despesa")
             with st.form("form_despesa", clear_on_submit=True):
-                descricao = st.text_input("Descrição (ex: Aluguel, Internet, Luz):")
+                descricao = st.text_input("Descrição do Gasto:", placeholder="Ex: Aluguel Unidade X")
                 valor_d = st.number_input("Valor (R$):", min_value=0.0, format="%.2f")
-                categoria = st.selectbox("Categoria:", ["Fixo", "Variável", "Manutenção", "Impostos", "Outros"])
-                data_venc = st.date_input("Data do Gasto:")
                 
-                if st.form_submit_button("SALVAR DESPESA"):
+                # Categoria ajuda na análise do Dashboard futuramente
+                categoria = st.selectbox("Categoria:", [
+                    "Fixa (Aluguel/Internet)", 
+                    "Variável (Energia/Água)", 
+                    "Manutenção", 
+                    "Impostos/Taxas", 
+                    "Compra de Mercadoria",
+                    "Outros"
+                ])
+                
+                # Seleção de qual PDV gerou a despesa (importante para sua expansão)
+                df_pts = carregar_dinamico("pontos")
+                unidade_despesa = st.selectbox("Vincular à Unidade:", ["Geral / Administrativo"] + df_pts['nome'].tolist())
+                
+                data_venc = st.date_input("Data do Gasto:", value=datetime.now())
+                
+                if st.form_submit_button("✅ SALVAR DESPESA", use_container_width=True):
                     if descricao and valor_d > 0:
                         nova_linha = {
                             "data": data_venc.strftime("%d/%m/%Y"),
+                            "unidade": unidade_despesa,
                             "descricao": descricao,
                             "categoria": categoria,
                             "valor": valor_d
                         }
-                        # Adiciona ao DataFrame existente
+                        
+                        # Concatena e envia para o Google Sheets
                         df_d = pd.concat([df_d, pd.DataFrame([nova_linha])], ignore_index=True)
                         
-                        with st.spinner("Salvando..."):
+                        with st.spinner("Atualizando registros..."):
                             conn.update(worksheet="despesas", data=df_d)
-                            st.cache_data.clear() # Limpa cache para atualizar o Dashboard
+                            st.cache_data.clear() # Limpa cache para o Dashboard ler o novo gasto
                             st.success("Despesa registrada com sucesso!")
                             time.sleep(1)
                             st.rerun()
                     else:
-                        st.warning("Preencha a descrição e o valor.")
+                        st.error("Por favor, preencha a descrição e o valor.")
 
-        with col2:
-            st.subheader("Histórico de Gastos")
+        with col_historico:
+            st.subheader("Histórico de Saídas")
             if not df_d.empty:
-                # Converte para número para garantir a soma correta
+                # Conversão para garantir soma correta e exibição limpa
                 df_d['valor'] = pd.to_numeric(df_d['valor'], errors='coerce')
                 
-                # Exibe a tabela
-                st.dataframe(df_d.sort_index(ascending=False), use_container_width=True, hide_index=True)
+                # Filtro rápido por unidade no histórico
+                unidade_filtro = st.multiselect("Filtrar histórico por unidade:", 
+                                               options=df_d['unidade'].unique(),
+                                               default=df_d['unidade'].unique())
                 
-                total_gastos = df_d['valor'].sum()
-                st.metric("Total Acumulado em Despesas", f"R$ {total_gastos:,.2f}")
+                df_filtrado = df_d[df_d['unidade'].isin(unidade_filtro)]
+                
+                # Exibe a tabela invertida (mais recentes primeiro)
+                st.dataframe(
+                    df_filtrado.sort_index(ascending=False), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+                
+                # Resumo financeiro rápido
+                total_gastos = df_filtrado['valor'].sum()
+                st.metric("Total no período selecionado", f"R$ {total_gastos:,.2f}")
+                
+                if st.button("🗑️ Limpar Todo o Histórico (Cuidado!)"):
+                    if st.session_state.perfil == "admin":
+                        conn.update(worksheet="despesas", data=pd.DataFrame(columns=["data", "unidade", "descricao", "categoria", "valor"]))
+                        st.cache_data.clear()
+                        st.rerun()
             else:
                 st.info("Nenhuma despesa registrada ainda.")
 
     except Exception as e:
-        st.error(f"Erro ao acessar despesas: {e}")
+        st.error(f"Erro ao acessar a aba de despesas: {e}")
+        st.info("Dica: Certifique-se de que existe uma aba chamada 'despesas' no seu Google Sheets.")
 
 # ==================== 7. ENTRADA E CADASTRO (COM CÁLCULO DINÂMICO) ====================
 elif menu == "💰 Entrada Mercadoria":
