@@ -550,12 +550,69 @@ elif menu == "📦 Inventário":
     else:
         st.warning("Nenhum produto cadastrado.")
 
-# ==================== 9. CONTABILIDADE ====================
+# ==================== 9. CONTABILIDADE (RELATÓRIOS POR PDV) ====================
 elif menu == "📂 Contabilidade":
-    st.header("📂 Relatórios Contábeis")
-    df_v = carregar_dinamico("vendas")
-    st.download_button("Baixar Relatório de Vendas (CSV)", df_v.to_csv(index=False), "vendas.csv")
-    st.dataframe(df_v, use_container_width=True)
+    st.header("📂 Relatórios Contábeis e Prestação de Contas")
+    
+    try:
+        # Carrega dados de vendas e máquinas
+        df_v = carregar_dinamico("vendas")
+        
+        if not df_v.empty:
+            # --- FILTROS DE RELATÓRIO ---
+            col_f1, col_f2 = st.columns(2)
+            
+            with col_f1:
+                # Filtro por PDV (Essencial para condomínios)
+                lista_pdvs = ["Todos"] + df_v['pdv'].unique().tolist()
+                pdv_selecionado = st.selectbox("Filtrar por Unidade (PDV):", lista_pdvs)
+            
+            with col_f2:
+                # Filtro por período (Opcional, mas recomendado)
+                st.write("Período: Total Acumulado") 
+                # Dica: Você pode implementar filtros de data aqui usando pd.to_datetime
+
+            # Aplicando o filtro de PDV
+            if pdv_selecionado != "Todos":
+                df_filtrado = df_v[df_v['pdv'] == pdv_selecionado]
+            else:
+                df_filtrado = df_v
+
+            # --- RESUMO FINANCEIRO DO FILTRO ---
+            bruto_f = pd.to_numeric(df_filtrado['valor_bruto'], errors='coerce').sum()
+            liq_f = pd.to_numeric(df_filtrado['valor_liquido'], errors='coerce').sum()
+            taxas_f = bruto_f - liq_f
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric(f"Venda Bruta ({pdv_selecionado})", f"R$ {bruto_f:,.2f}")
+            c2.metric("Total Taxas Cartão", f"R$ {taxas_f:,.2f}", delta_color="inverse")
+            c3.metric("Repasse Líquido", f"R$ {liq_f:,.2f}")
+
+            st.divider()
+
+            # --- TABELA DE VENDAS DETALHADA ---
+            st.subheader(f"Detalhamento de Transações - {pdv_selecionado}")
+            st.dataframe(
+                df_filtrado.sort_index(ascending=False), 
+                use_container_width=True, 
+                hide_index=True
+            )
+
+            # --- EXPORTAÇÃO ---
+            csv = df_filtrado.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                label=f"📥 Baixar Relatório {pdv_selecionado} (CSV)",
+                data=csv,
+                file_name=f"relatorio_flashstop_{pdv_selecionado}.csv",
+                mime='text/csv',
+                use_container_width=True
+            )
+
+        else:
+            st.info("Ainda não existem vendas registradas para gerar relatórios.")
+
+    except Exception as e:
+        st.error(f"Erro ao processar contabilidade: {e}")
 
 # ==================== 10. CONFIGURAÇÕES (PDVs E TAXAS) ====================
 elif menu == "📟 Configurações":
