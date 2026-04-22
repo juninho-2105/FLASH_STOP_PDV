@@ -4,16 +4,17 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 
-# ==================== 1. CONFIGURAÇÕES INICIAIS ====================
-st.set_page_config(page_title="Flash Stop Ultimate v6.6", layout="wide", page_icon="⚡")
+# ==================== 1. CONFIGURAÇÕES E CONEXÃO ====================
+st.set_page_config(page_title="Flash Stop - PDV Inteligente", layout="wide", page_icon="⚡")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# Estrutura padrão de colunas
 COLS = {
     "produtos": ["nome", "estoque", "validade", "preco", "estoque_minimo"],
     "vendas": ["data", "pdv", "maquina", "produto", "valor_bruto", "valor_liquido", "forma"],
     "despesas": ["pdv", "descricao", "valor", "vencimento"],
     "maquinas": ["nome_maquina", "pdv_vinculado", "taxa_debito", "taxa_credito", "taxa_pix"],
-    "pontos": ["nome"],
+    "pontos": ["nome", "senha"],
     "fornecedores": ["nome_fantasia", "cnpj_cpf"]
 }
 
@@ -31,41 +32,54 @@ def carregar(aba):
     except: return pd.DataFrame(columns=COLS.get(aba, []))
 
 def render_logo(size="42px"):
-    st.markdown(f'<h1 style="text-align:center;font-family:sans-serif;font-size:{size};color:#000;">FLASH <span style="color:#7CFC00;font-style:italic;">STOP</span></h1>', unsafe_allow_html=True)
+    st.markdown(f'<h1 style="text-align:center;font-family:sans-serif;font-size:{size};color:#000;margin-bottom:0;">FLASH <span style="color:#7CFC00;font-style:italic;">STOP</span></h1>', unsafe_allow_html=True)
 
-# ==================== 2. CONTROLE DE ACESSO ====================
-if "auth" not in st.session_state: st.session_state.auth = False
+# ==================== 2. CONTROLE DE ACESSO POR PDV ====================
+if "auth" not in st.session_state: 
+    st.session_state.auth = False
+    st.session_state.perfil = None
+    st.session_state.pdv_atual = None
+
 if not st.session_state.auth:
     render_logo("55px")
-    with st.form("login"):
-        u, s = st.text_input("Usuário"), st.text_input("Senha", type="password")
-        if st.form_submit_button("Acessar Painel"):
-            if u == "admin" and s == "flash123":
-                st.session_state.auth = True
-                st.rerun()
+    df_pts = carregar("pontos")
+    col_l1, col_l2, col_l3 = st.columns([1,1.5,1])
+    with col_l2:
+        with st.form("login_form"):
+            u = st.text_input("Usuário ou Nome do PDV")
+            s = st.text_input("Senha", type="password")
+            if st.form_submit_button("Acessar Sistema", use_container_width=True):
+                if u == "admin" and s == "flash123":
+                    st.session_state.auth = True
+                    st.session_state.perfil = "admin"
+                    st.rerun()
+                elif not df_pts.empty and u in df_pts['nome'].values:
+                    senha_correta = str(df_pts[df_pts['nome'] == u].iloc[0]['senha'])
+                    if s == senha_correta:
+                        st.session_state.auth = True
+                        st.session_state.perfil = "cliente"
+                        st.session_state.pdv_atual = u
+                        st.rerun()
+                st.error("Dados inválidos. Verifique o nome do PDV e a senha.")
     st.stop()
 
-# ==================== 3. MENU LATERAL ====================
+# ==================== 3. NAVEGAÇÃO ====================
 with st.sidebar:
     render_logo("30px")
+    if st.session_state.perfil == "cliente":
+        st.success(f"📍 Local: {st.session_state.pdv_atual}")
+        menu = "🛍️ Self-Checkout"
+    else:
+        menu = st.radio("Administração", ["📊 Dashboard", "🛍️ Self-Checkout", "📈 Custos Fixos", "💰 Entrada Mercadoria", "📦 Inventário", "📂 Contabilidade", "📟 Configurações"])
+    
     st.divider()
-    menu = st.radio("Navegação", [
-        "📊 Dashboard & Performance", 
-        "🛍️ Frente de Caixa (PDV)", 
-        "📈 Custos Fixos", 
-        "💰 Entrada de Mercadoria", 
-        "📦 Inventário Geral", 
-        "📂 Relatórios Contábeis",
-        "🚚 Fornecedores", 
-        "📟 Configurações"
-    ])
-    if st.button("🔄 Atualizar Dados"):
-        st.cache_data.clear()
+    if st.button("🚪 Sair / Deslogar"):
+        st.session_state.auth = False
         st.rerun()
 
-# ==================== 4. DASHBOARD & PERFORMANCE ====================
-if menu == "📊 Dashboard & Performance":
-    st.header("📊 Performance da Flash Stop")
+# ==================== 4. DASHBOARD (ADMIN) ====================
+if menu == "📊 Dashboard":
+    st.header("📊 Performance Flash Stop")
     df_v, df_d, df_p = carregar("vendas"), carregar("despesas"), carregar("produtos")
     
     bruto = df_v['valor_bruto'].sum()
@@ -79,214 +93,50 @@ if menu == "📊 Dashboard & Performance":
     c2.metric("Líquido (Pós-Taxas)", f"R$ {liq:,.2f}")
     c3.metric("Custos Fixos", f"R$ {gastos:,.2f}")
     c4.metric("Cashback (2%)", f"R$ {cashback:,.2f}", delta=f"-{cashback:,.2f}", delta_color="inverse")
-    c5.metric("Resultado Final", f"R$ {resultado:,.2f}")
+    c5.metric("Lucro Final", f"R$ {resultado:,.2f}")
 
-    st.divider()
-    if not df_v.empty:
-        st.subheader("📈 Crescimento Mensal")
-        df_v['data_dt'] = pd.to_datetime(df_v['data'], dayfirst=True, errors='coerce')
-        df_chart = df_v.dropna(subset=['data_dt']).set_index('data_dt').resample('M')['valor_bruto'].sum().reset_index()
-        df_chart['Mês'] = df_chart['data_dt'].dt.strftime('%m/%Y')
-        st.area_chart(df_chart.set_index('Mês')['valor_bruto'])
-
-    st.divider()
     col_a, col_b = st.columns(2)
     with col_a:
-        st.subheader("🚨 Reposição de Estoque")
+        st.subheader("🚨 Estoque em Alerta")
         baixo = df_p[df_p['estoque'] <= df_p['estoque_minimo']]
-        if not baixo.empty: st.warning(f"{len(baixo)} itens críticos"); st.table(baixo[['nome', 'estoque']])
-        else: st.success("Estoque OK!")
+        st.table(baixo[['nome', 'estoque']]) if not baixo.empty else st.success("Estoque OK")
     with col_b:
-        st.subheader("📅 Validade (Próximos 15 dias)")
-        hoje = datetime.now()
+        st.subheader("📅 Validade (15 dias)")
         vencendo = []
         for _, r in df_p.iterrows():
             try:
                 dv = datetime.strptime(str(r['validade']), "%d/%m/%Y")
-                if dv <= hoje + timedelta(days=15): vencendo.append({"Produto": r['nome'], "Data": r['validade']})
+                if dv <= datetime.now() + timedelta(days=15): vencendo.append({"Item": r['nome'], "Vencimento": r['validade']})
             except: continue
-        if vencendo: st.error(f"{len(vencendo)} itens vencendo"); st.table(vencendo)
-        else: st.success("Validades OK!")
+        st.table(vencendo) if vencendo else st.success("Validades OK")
 
-# ==================== 5. SELF-CHECKOUT (FRENTE DE CAIXA) ====================
-elif menu == "🛍️ Frente de Caixa (PDV)":
-    # Layout focado na experiência do cliente
-    st.markdown("<h2 style='text-align: center;'>🛒 Autoatendimento Flash Stop</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: gray;'>Passe o produto no leitor ou selecione abaixo</p>", unsafe_allow_html=True)
-    
+# ==================== 5. SELF-CHECKOUT (TRAVADO POR PDV) ====================
+elif menu == "🛍️ Self-Checkout":
+    st.markdown(f"<h2 style='text-align: center;'>🛒 Autoatendimento - {st.session_state.pdv_atual if st.session_state.pdv_atual else 'Admin'}</h2>", unsafe_allow_html=True)
     df_p, df_m, df_pts = carregar("produtos"), carregar("maquinas"), carregar("pontos")
     
-    # Centralizando o totem de compra
-    col_espaco, col_totem, col_espaco2 = st.columns([1, 2, 1])
-    
-    with col_totem:
+    # Define o PDV da venda (automatico se for login de cliente)
+    v_pdv = st.session_state.pdv_atual if st.session_state.perfil == "cliente" else st.selectbox("Simular PDV:", df_pts['nome'].tolist())
+
+    c_s1, c_s2, c_s3 = st.columns([1, 2, 1])
+    with c_s2:
         with st.container(border=True):
-            # 1. Seleção do Ponto (Geralmente fixo por tablet)
-            v_pdv = st.selectbox("Unidade Atual", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
+            v_prod = st.selectbox("Bipe o código ou busque o produto:", [""] + df_p['nome'].tolist())
+            v_qtd = st.number_input("Quantidade:", min_value=1, step=1, value=1)
             
-            # 2. Entrada do Produto (Foco no Leitor de Código de Barras / Busca rápida)
-            v_prod = st.selectbox("Escolha seu Produto", [""] + df_p['nome'].tolist(), index=0, help="Dica: Você pode digitar o nome do produto")
-            
-            v_qtd = st.number_input("Quantidade", min_value=1, step=1, value=1)
-            
-            # Mostrar preço em destaque ao selecionar
             if v_prod != "":
-                preco_unit = float(df_p[df_p['nome'] == v_prod].iloc[0]['preco'])
-                total_venda = preco_unit * v_qtd
-                st.markdown(f"<h3 style='text-align: center; color: #7CFC00;'>Total: R$ {total_venda:,.2f}</h3>", unsafe_allow_html=True)
+                p_u = float(df_p[df_p['nome'] == v_prod].iloc[0]['preco'])
+                total = p_u * v_qtd
+                st.markdown(f"<h1 style='text-align:center; color:#7CFC00;'>R$ {total:,.2f}</h1>", unsafe_allow_html=True)
+                v_forma = st.radio("Selecione o Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
                 
-                st.divider()
-                st.write("💳 **Como deseja pagar?**")
-                v_forma = st.radio("Selecione a forma de pagamento:", ["Pix", "Cartão de Débito", "Cartão de Crédito"], horizontal=True)
-                
-                # Seleção automática da máquina vinculada a este PDV
-                maquinas_disponiveis = df_m[df_m['pdv_vinculado'] == v_pdv]['nome_maquina'].tolist()
-                v_maq = maquinas_disponiveis[0] if maquinas_disponiveis else "Dinheiro"
-
-                if st.button("✅ FINALIZAR PAGAMENTO", use_container_width=True, type="primary"):
-                    # Lógica de processamento
+                if st.button("✅ FINALIZAR COMPRA", use_container_width=True, type="primary"):
+                    # Busca automática da máquina do PDV logado
+                    maqs = df_m[df_m['pdv_vinculado'] == v_pdv]['nome_maquina'].tolist()
+                    m_nome = maqs[0] if maqs else "Dinheiro"
+                    
                     idx = df_p[df_p['nome'] == v_prod].index[0]
-                    v_bruto = total_venda
-                    
-                    # Cálculo de taxa automático (invisível para o cliente)
                     taxa = 0.0
-                    if v_maq != "Dinheiro":
-                        m_i = df_m[df_m['nome_maquina'] == v_maq].iloc[0]
-                        taxa = m_i['taxa_pix'] if v_forma == "Pix" else m_i['taxa_debito'] if v_forma == "Cartão de Débito" else m_i['taxa_credito']
-                    
-                    v_liq = v_bruto * (1 - (taxa/100))
-                    
-                    # Baixa no estoque
-                    df_p.at[idx, 'estoque'] -= v_qtd
-                    
-                    # Registro da venda
-                    nova = pd.DataFrame([{
-                        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                        "pdv": v_pdv,
-                        "maquina": v_maq,
-                        "produto": v_prod,
-                        "valor_bruto": v_bruto,
-                        "valor_liquido": v_liq,
-                        "forma": v_forma
-                    }])
-                    
-                    conn.update(worksheet="vendas", data=pd.concat([carregar("vendas"), nova], ignore_index=True))
-                    conn.update(worksheet="produtos", data=df_p)
-                    
-                    st.balloons()
-                    st.success("Obrigado pela compra! Volte sempre.")
-                    time.sleep(3)
-                    st.rerun()
-
-# ==================== 6. CUSTOS FIXOS ====================
-elif menu == "📈 Custos Fixos":
-    st.header("📈 Gastos Operacionais")
-    df_d, df_pts = carregar("despesas"), carregar("pontos")
-    with st.form("d_f"):
-        p = st.selectbox("Unidade", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
-        d = st.text_input("Descrição")
-        v = st.number_input("Valor R$", min_value=0.0)
-        if st.form_submit_button("Salvar"):
-            nova = pd.DataFrame([{"pdv": p, "descricao": d, "valor": v, "vencimento": datetime.now().strftime("%d/%m/%Y")}])
-            conn.update(worksheet="despesas", data=pd.concat([df_d, nova], ignore_index=True))
-            st.success("Lançado!"); st.rerun()
-    st.dataframe(df_d, use_container_width=True, hide_index=True)
-
-# ==================== 7. ENTRADA DE MERCADORIA ====================
-elif menu == "💰 Entrada de Mercadoria":
-    st.header("💰 Entrada e Precificação")
-    df_p = carregar("produtos")
-    opcoes = ["NOVO"] + df_p['nome'].tolist()
-    sel = st.selectbox("Produto para editar ou NOVO:", opcoes)
-    
-    val_estoque_atual = 0
-    if sel != "NOVO":
-        d_p = df_p[df_p['nome'] == sel].iloc[0]
-        val_estoque_atual = int(d_p['estoque'])
-        st.info(f"Editando: {sel} | Estoque Atual: {val_estoque_atual}")
-
-    with st.form("ent_f"):
-        nome_in = st.text_input("Nome") if sel == "NOVO" else sel
-        c1, c2 = st.columns(2)
-        custo = c1.number_input("Custo Un. (Compra)", min_value=0.0)
-        margem = c2.slider("Margem %", 10, 200, 50)
-        qtd_in = st.number_input("Qtd Entrada", min_value=1)
-        val_in = st.date_input("Nova Data de Validade")
-        if st.form_submit_button("CONCLUIR ENTRADA"):
-            preco_v = custo * (1 + margem/100)
-            if sel == "NOVO":
-                novo = pd.DataFrame([{"nome": nome_in, "estoque": qtd_in, "preco": preco_v, "validade": val_in.strftime("%d/%m/%Y"), "estoque_minimo": 5}])
-                df_p = pd.concat([df_p, novo], ignore_index=True)
-            else:
-                idx = df_p[df_p['nome'] == sel].index[0]
-                df_p.at[idx, 'estoque'] = val_estoque_atual + qtd_in
-                df_p.at[idx, 'preco'] = preco_v
-                df_p.at[idx, 'validade'] = val_in.strftime("%d/%m/%Y")
-            conn.update(worksheet="produtos", data=df_p); st.success("Atualizado!"); time.sleep(1); st.rerun()
-
-# ==================== 8. INVENTÁRIO GERAL ====================
-elif menu == "📦 Inventário Geral":
-    st.header("📦 Gestão de Inventário")
-    df_p = carregar("produtos")
-    with st.form("min_f"):
-        p_sel = st.selectbox("Selecionar Produto para Ajustar Mínimo:", df_p['nome'].tolist() if not df_p.empty else ["-"])
-        e_m = st.number_input("Novo Limite de Estoque Mínimo para Alerta:", min_value=0)
-        if st.form_submit_button("Atualizar Limite"):
-            if p_sel != "-":
-                idx = df_p[df_p['nome'] == p_sel].index[0]
-                df_p.at[idx, 'estoque_minimo'] = e_m
-                conn.update(worksheet="produtos", data=df_p); st.success(f"Alerta de {p_sel} alterado!"); st.rerun()
-    st.divider()
-    if not df_p.empty:
-        df_p['Status'] = df_p.apply(lambda x: "🚨 REPOR" if x['estoque'] <= x['estoque_minimo'] else "✅ OK", axis=1)
-        st.dataframe(df_p[['Status', 'nome', 'estoque', 'estoque_minimo', 'preco', 'validade']], use_container_width=True, hide_index=True)
-
-# ==================== 9. RELATÓRIOS CONTÁBEIS ====================
-elif menu == "📂 Relatórios Contábeis":
-    st.header("📂 Relatórios para Contabilidade")
-    df_v = carregar("vendas")
-    df_pts = carregar("pontos")
-    if not df_v.empty:
-        c1, c2 = st.columns(2)
-        pdv_f = c1.selectbox("Ponto de Venda", ["Todos"] + df_pts['nome'].tolist())
-        df_v['data_dt'] = pd.to_datetime(df_v['data'], dayfirst=True, errors='coerce')
-        meses = ["Todos"] + df_v['data_dt'].dt.strftime('%m/%Y').unique().tolist()
-        mes_f = c2.selectbox("Mês de Referência", meses)
-        
-        filtrados = df_v.copy()
-        if pdv_f != "Todos": filtrados = filtrados[filtrados['pdv'] == pdv_f]
-        if mes_f != "Todos": filtrados = filtrados[filtrados['data_dt'].dt.strftime('%m/%Y') == mes_f]
-        
-        st.metric("Faturamento Bruto Filtrado", f"R$ {filtrados['valor_bruto'].sum():,.2f}")
-        st.dataframe(filtrados.drop(columns=['data_dt']), hide_index=True)
-        csv = filtrados.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 Baixar Relatório (CSV para Excel)", data=csv, file_name=f"relatorio_contabil_{mes_f}.csv", mime="text/csv")
-    else: st.info("Sem vendas para gerar relatórios.")
-
-# ==================== 10. FORNECEDORES ====================
-elif menu == "🚚 Fornecedores":
-    st.header("🚚 Gestão de Fornecedores")
-    df_f = carregar("fornecedores")
-    with st.form("f_f"):
-        n = st.text_input("Nome Fantasia"); c = st.text_input("CNPJ/CPF")
-        if st.form_submit_button("Salvar Fornecedor"):
-            conn.update(worksheet="fornecedores", data=pd.concat([df_f, pd.DataFrame([{"nome_fantasia": n, "cnpj_cpf": c}])], ignore_index=True)); st.rerun()
-    st.dataframe(df_f, use_container_width=True, hide_index=True)
-
-# ==================== 11. CONFIGURAÇÕES ====================
-elif menu == "📟 Configurações":
-    st.header("📟 Unidades e Taxas")
-    df_pts, df_m = carregar("pontos"), carregar("maquinas")
-    t1, t2 = st.tabs(["Unidades/PDV", "Máquinas de Cartão"])
-    with t1:
-        n_p = st.text_input("Novo Nome do PDV")
-        if st.button("Cadastrar PDV"):
-            conn.update(worksheet="pontos", data=pd.concat([df_pts, pd.DataFrame([{"nome": n_p}])], ignore_index=True)); st.rerun()
-        st.dataframe(df_pts, use_container_width=True, hide_index=True)
-    with t2:
-        with st.form("m_f"):
-            mn = st.text_input("Nome da Máquina"); mv = st.selectbox("Vincular ao PDV", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
-            c1, c2, c3 = st.columns(3); p_tx = c1.number_input("Taxa Pix %"); d_tx = c2.number_input("Taxa Débito %"); c_tx = c3.number_input("Taxa Crédito %")
-            if st.form_submit_button("Salvar Máquina"):
-                conn.update(worksheet="maquinas", data=pd.concat([df_m, pd.DataFrame([{"nome_maquina": mn, "pdv_vinculado": mv, "taxa_debito": d_tx, "taxa_credito": c_tx, "taxa_pix": p_tx}])], ignore_index=True)); st.rerun()
-        st.dataframe(df_m, use_container_width=True, hide_index=True)
+                    if m_nome != "Dinheiro":
+                        m_d = df_m[df_m['nome_maquina'] == m_nome].iloc[0]
+                        taxa = m_d['taxa_pix'] if v_forma == "Pix" else m_d['taxa_
