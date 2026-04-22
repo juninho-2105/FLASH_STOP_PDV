@@ -276,67 +276,82 @@ elif menu == "🛒 Self-Checkout":
         else:
             st.error(f"Erro: {e}")
 
-# ==================== 6. ENTRADA MERCADORIA (ESTOQUE + PREÇOS) ====================
+# ==================== 6. ENTRADA E CADASTRO DE PRODUTOS ====================
 elif menu == "💰 Entrada Mercadoria":
-    st.header("💰 Entrada de Estoque e Ajuste de Preços")
+    st.header("💰 Gestão de Estoque e Preços")
     
     try:
-        # Carrega os produtos do cache/Sheets
         df_p = carregar_dinamico("produtos")
         
-        with st.form("form_entrada", clear_on_submit=True):
-            st.info("Atualize o estoque e valide o preço final de venda.")
-            
-            # 1. Seleção do Produto
-            lista_produtos = df_p['nome'].tolist()
-            prod_selecionado = st.selectbox("Selecione o produto:", lista_produtos)
-            
-            # Busca dados atuais do produto para preencher o formulário
-            dados_atuais = df_p[df_p['nome'] == prod_selecionado].iloc[0]
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                qtd_nova = st.number_input("Quantidade que está entrando:", min_value=1, step=1)
-                # Mostra o estoque atual para conferência
-                st.write(f"📦 Estoque atual: {dados_atuais['estoque']}")
-            
-            with col2:
-                # Permite ajustar o preço final no momento da entrada
-                preco_venda_atual = float(dados_atuais['preco'])
-                novo_preco_venda = st.number_input("Preço Final de Venda (R$):", 
-                                                   min_value=0.0, 
-                                                   value=preco_venda_atual, 
-                                                   format="%.2f")
-            
-            # 2. Botão de Registro
-            if st.form_submit_button("CONFIRMAR ENTRADA", use_container_width=True):
-                # Localiza o índice
-                idx = df_p[df_p['nome'] == prod_selecionado].index[0]
+        # Opções: Repor o que já existe ou Cadastrar algo novo
+        tipo_acao = st.radio("O que deseja fazer?", ["Repor Estoque Existente", "Cadastrar Novo Produto"], horizontal=True)
+
+        if tipo_acao == "Repor Estoque Existente":
+            with st.form("form_reposicao", clear_on_submit=True):
+                prod_sel = st.selectbox("Selecione o produto:", df_p['nome'].tolist())
+                dados = df_p[df_p['nome'] == prod_sel].iloc[0]
                 
-                # Cálculos de Atualização
-                estoque_antigo = int(df_p.at[idx, 'estoque'])
-                estoque_atualizado = estoque_antigo + qtd_nova
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    qtd_inc = st.number_input("Quantidade que chegou:", min_value=1, step=1)
+                with c2:
+                    custo = st.number_input("Preço de Custo Unitário (R$):", min_value=0.0, format="%.2f")
+                with c3:
+                    margem = st.number_input("Margem de Lucro (%):", min_value=0.0, value=30.0)
+
+                # Cálculo automático do preço sugerido
+                preco_sugerido = custo * (1 + (margem / 100))
+                st.write(f"💡 Preço sugerido com {margem}% de lucro: **R$ {preco_sugerido:.2f}**")
                 
-                # Atualiza o DataFrame
-                df_p.at[idx, 'estoque'] = estoque_atualizado
-                df_p.at[idx, 'preco'] = novo_preco_venda
-                
-                # 3. Persistência no Google Sheets
-                with st.spinner("Salvando no Google Sheets..."):
+                preco_final = st.number_input("Confirmar Preço Final de Venda (R$):", value=preco_sugerido, format="%.2f")
+
+                if st.form_submit_button("ATUALIZAR ESTOQUE"):
+                    idx = df_p[df_p['nome'] == prod_sel].index[0]
+                    df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) + qtd_inc
+                    df_p.at[idx, 'preco'] = preco_final
+                    
                     conn.update(worksheet="produtos", data=df_p)
-                    
-                    # Limpa o cache para que o Checkout e Dashboard vejam os novos dados
                     st.cache_data.clear()
-                    
-                    st.success(f"✅ Sucesso! {prod_selecionado} agora tem {estoque_atualizado} unidades e custa R$ {novo_preco_venda:.2f}")
-                    time.sleep(2)
+                    st.success(f"Estoque de {prod_sel} atualizado!")
                     st.rerun()
 
-    except Exception as e:
-        if "429" in str(e):
-            st.warning("Aguarde um momento... O Google está processando as requisições.")
         else:
-            st.error(f"Erro ao processar entrada: {e}")
+            with st.form("form_novo_prod", clear_on_submit=True):
+                st.subheader("Novo Cadastro")
+                nome_n = st.text_input("Nome do Produto:")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    estoque_n = st.number_input("Estoque Inicial:", min_value=0, step=1)
+                    custo_n = st.number_input("Custo Unitário (R$):", min_value=0.0, format="%.2f")
+                with c2:
+                    minimo_n = st.number_input("Estoque Mínimo (Alerta):", min_value=1, value=5)
+                    margem_n = st.number_input("Margem de Lucro (%):", min_value=0.0, value=30.0)
+                
+                # Cálculo automático
+                venda_n = custo_n * (1 + (margem_n / 100))
+                st.info(f"O preço de venda será: R$ {venda_n:.2f}")
+
+                if st.form_submit_button("CADASTRAR PRODUTO"):
+                    if nome_n == "":
+                        st.error("O nome do produto é obrigatório!")
+                    else:
+                        novo_item = {
+                            "nome": nome_n,
+                            "estoque": estoque_n,
+                            "estoque_minimo": minimo_n,
+                            "preco": venda_n,
+                            "validade": "" # Pode ser preenchido depois
+                        }
+                        df_p = pd.concat([df_p, pd.DataFrame([novo_item])], ignore_index=True)
+                        conn.update(worksheet="produtos", data=df_p)
+                        st.cache_data.clear()
+                        st.success(f"{nome_n} cadastrado com sucesso!")
+                        time.sleep(2)
+                        st.rerun()
+
+    except Exception as e:
+        st.error(f"Erro: {e}")
 
 # ==================== 7. INVENTÁRIO (CONFERÊNCIA) ====================
 elif menu == "📦 Inventário":
