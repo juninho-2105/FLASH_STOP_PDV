@@ -137,6 +137,10 @@ elif menu == "🛍️ Self-Checkout":
                     
                     idx = df_p[df_p['nome'] == v_prod].index[0]
                     taxa = 0.0
+                   # CORREÇÃO DO BLOCO DE TAXAS:
+                    idx = df_p[df_p['nome'] == v_prod].index[0]
+                    taxa = 0.0
                     if m_nome != "Dinheiro":
                         m_d = df_m[df_m['nome_maquina'] == m_nome].iloc[0]
-                        taxa = m_d['taxa_pix'] if v_forma == "Pix" else m_d['taxa_
+                        # Esta é a linha que estava cortada:
+                        taxa = m_d['taxa_pix'] if v_forma == "Pix" else m_d['taxa_debito'] if v_forma == "Débito" else m_d['taxa_credito']
