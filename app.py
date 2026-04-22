@@ -108,31 +108,75 @@ if menu == "📊 Dashboard & Performance":
         if vencendo: st.error(f"{len(vencendo)} itens vencendo"); st.table(vencendo)
         else: st.success("Validades OK!")
 
-# ==================== 5. FRENTE DE CAIXA ====================
+# ==================== 5. SELF-CHECKOUT (FRENTE DE CAIXA) ====================
 elif menu == "🛍️ Frente de Caixa (PDV)":
-    st.header("🛍️ Registro de Venda")
+    # Layout focado na experiência do cliente
+    st.markdown("<h2 style='text-align: center;'>🛒 Autoatendimento Flash Stop</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>Passe o produto no leitor ou selecione abaixo</p>", unsafe_allow_html=True)
+    
     df_p, df_m, df_pts = carregar("produtos"), carregar("maquinas"), carregar("pontos")
-    with st.form("venda_form"):
-        v_pdv = st.selectbox("Ponto", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
-        v_prod = st.selectbox("Produto", df_p['nome'].tolist() if not df_p.empty else ["-"])
-        c1, c2 = st.columns(2)
-        v_forma = c1.selectbox("Pagamento", ["Pix", "Débito", "Crédito", "Dinheiro"])
-        v_maq = c2.selectbox("Máquina", df_m[df_m['pdv_vinculado'] == v_pdv]['nome_maquina'].tolist() if not df_m.empty else ["Dinheiro"])
-        v_qtd = st.number_input("Qtd", min_value=1, step=1)
-        if st.form_submit_button("🛒 FINALIZAR"):
-            if v_prod != "-" and v_pdv != "-":
-                idx = df_p[df_p['nome'] == v_prod].index[0]
-                v_bruto = float(df_p.at[idx, 'preco']) * v_qtd
-                taxa = 0.0
-                if v_maq != "Dinheiro":
-                    m_i = df_m[df_m['nome_maquina'] == v_maq].iloc[0]
-                    taxa = m_i['taxa_pix'] if v_forma == "Pix" else m_i['taxa_debito'] if v_forma == "Débito" else m_i['taxa_credito']
-                v_liq = v_bruto * (1 - (taxa/100))
-                df_p.at[idx, 'estoque'] -= v_qtd
-                nova = pd.DataFrame([{"data": datetime.now().strftime("%d/%m/%Y %H:%M"), "pdv": v_pdv, "maquina": v_maq, "produto": v_prod, "valor_bruto": v_bruto, "valor_liquido": v_liq, "forma": v_forma}])
-                conn.update(worksheet="vendas", data=pd.concat([carregar("vendas"), nova], ignore_index=True))
-                conn.update(worksheet="produtos", data=df_p)
-                st.success("Venda salva!"); time.sleep(1); st.rerun()
+    
+    # Centralizando o totem de compra
+    col_espaco, col_totem, col_espaco2 = st.columns([1, 2, 1])
+    
+    with col_totem:
+        with st.container(border=True):
+            # 1. Seleção do Ponto (Geralmente fixo por tablet)
+            v_pdv = st.selectbox("Unidade Atual", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
+            
+            # 2. Entrada do Produto (Foco no Leitor de Código de Barras / Busca rápida)
+            v_prod = st.selectbox("Escolha seu Produto", [""] + df_p['nome'].tolist(), index=0, help="Dica: Você pode digitar o nome do produto")
+            
+            v_qtd = st.number_input("Quantidade", min_value=1, step=1, value=1)
+            
+            # Mostrar preço em destaque ao selecionar
+            if v_prod != "":
+                preco_unit = float(df_p[df_p['nome'] == v_prod].iloc[0]['preco'])
+                total_venda = preco_unit * v_qtd
+                st.markdown(f"<h3 style='text-align: center; color: #7CFC00;'>Total: R$ {total_venda:,.2f}</h3>", unsafe_allow_html=True)
+                
+                st.divider()
+                st.write("💳 **Como deseja pagar?**")
+                v_forma = st.radio("Selecione a forma de pagamento:", ["Pix", "Cartão de Débito", "Cartão de Crédito"], horizontal=True)
+                
+                # Seleção automática da máquina vinculada a este PDV
+                maquinas_disponiveis = df_m[df_m['pdv_vinculado'] == v_pdv]['nome_maquina'].tolist()
+                v_maq = maquinas_disponiveis[0] if maquinas_disponiveis else "Dinheiro"
+
+                if st.button("✅ FINALIZAR PAGAMENTO", use_container_width=True, type="primary"):
+                    # Lógica de processamento
+                    idx = df_p[df_p['nome'] == v_prod].index[0]
+                    v_bruto = total_venda
+                    
+                    # Cálculo de taxa automático (invisível para o cliente)
+                    taxa = 0.0
+                    if v_maq != "Dinheiro":
+                        m_i = df_m[df_m['nome_maquina'] == v_maq].iloc[0]
+                        taxa = m_i['taxa_pix'] if v_forma == "Pix" else m_i['taxa_debito'] if v_forma == "Cartão de Débito" else m_i['taxa_credito']
+                    
+                    v_liq = v_bruto * (1 - (taxa/100))
+                    
+                    # Baixa no estoque
+                    df_p.at[idx, 'estoque'] -= v_qtd
+                    
+                    # Registro da venda
+                    nova = pd.DataFrame([{
+                        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "pdv": v_pdv,
+                        "maquina": v_maq,
+                        "produto": v_prod,
+                        "valor_bruto": v_bruto,
+                        "valor_liquido": v_liq,
+                        "forma": v_forma
+                    }])
+                    
+                    conn.update(worksheet="vendas", data=pd.concat([carregar("vendas"), nova], ignore_index=True))
+                    conn.update(worksheet="produtos", data=df_p)
+                    
+                    st.balloons()
+                    st.success("Obrigado pela compra! Volte sempre.")
+                    time.sleep(3)
+                    st.rerun()
 
 # ==================== 6. CUSTOS FIXOS ====================
 elif menu == "📈 Custos Fixos":
