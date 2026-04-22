@@ -195,7 +195,57 @@ elif menu == "📦 Inventário Geral":
         df_p['Status'] = df_p.apply(lambda x: "🚨 REPOR" if x['estoque'] <= x['estoque_minimo'] else "✅ OK", axis=1)
         st.dataframe(df_p[['Status', 'nome', 'estoque', 'estoque_minimo', 'preco', 'validade']], use_container_width=True, hide_index=True)
 
-# ==================== 9. FORNECEDORES ====================
+# ==================== 9. RELATÓRIOS CONTÁBEIS ====================
+elif menu == "📂 Relatórios Contábeis":
+    st.header("📂 Fechamento e Exportação Contábil")
+    df_v = carregar("vendas")
+    df_pts = carregar("pontos")
+    
+    if not df_v.empty:
+        # Filtros para o Contador
+        col1, col2 = st.columns(2)
+        pdv_filtro = col1.selectbox("Filtrar por Unidade", ["Todos"] + df_pts['nome'].tolist())
+        
+        # Filtro de Data
+        df_v['data_dt'] = pd.to_datetime(df_v['data'], dayfirst=True, errors='coerce')
+        meses = df_v['data_dt'].dt.strftime('%m/%Y').unique().tolist()
+        mes_filtro = col2.selectbox("Filtrar por Mês", ["Todos"] + meses)
+        
+        # Aplicação dos Filtros
+        dados_filtrados = df_v.copy()
+        if pdv_filtro != "Todos":
+            dados_filtrados = dados_filtrados[dados_filtrados['pdv'] == pdv_filtro]
+        if mes_filtro != "Todos":
+            dados_filtrados = dados_filtrados[dados_filtrados['data_dt'].dt.strftime('%m/%Y') == mes_filtro]
+            
+        # Resumo para conferência rápida
+        st.subheader(f"Resumo: {pdv_filtro} ({mes_filtro})")
+        c1, c2, c3 = st.columns(3)
+        bruto_f = dados_filtrados['valor_bruto'].sum()
+        liq_f = dados_filtrados['valor_liquido'].sum()
+        c1.metric("Faturamento Bruto", f"R$ {bruto_f:,.2f}")
+        c2.metric("Líquido (Pós-Taxas)", f"R$ {liq_f:,.2f}")
+        c3.metric("Total de Vendas", len(dados_filtrados))
+        
+        st.divider()
+        
+        # Tabela de Dados e Exportação
+        st.write("Dados detalhados para o contador:")
+        # Removemos a coluna auxiliar de data antes de mostrar/baixar
+        export_df = dados_filtrados.drop(columns=['data_dt'])
+        st.dataframe(export_df, use_container_width=True, hide_index=True)
+        
+        # Botão de Download CSV
+        csv = export_df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 Baixar Relatório para Excel/Contabilidade",
+            data=csv,
+            file_name=f"contabilidade_flash_stop_{pdv_filtro}_{mes_filtro}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("Ainda não existem vendas registradas para gerar relatórios.")
+# ==================== 10. FORNECEDORES ====================
 elif menu == "🚚 Fornecedores":
     st.header("🚚 Gestão de Fornecedores")
     df_f = carregar("fornecedores")
@@ -206,7 +256,7 @@ elif menu == "🚚 Fornecedores":
             st.rerun()
     st.dataframe(df_f, use_container_width=True)
 
-# ==================== 10. CONFIGURAÇÕES ====================
+# ==================== 11. CONFIGURAÇÕES ====================
 elif menu == "📟 Configurações":
     st.header("📟 Unidades e Taxas")
     df_pts, df_m = carregar("pontos"), carregar("maquinas")
