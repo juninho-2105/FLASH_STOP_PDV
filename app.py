@@ -276,23 +276,65 @@ elif menu == "🛒 Self-Checkout":
         else:
             st.error(f"Erro: {e}")
 
-# ==================== 6. ENTRADA MERCADORIA ====================
+# ==================== 6. ENTRADA MERCADORIA (COM LIMPEZA DE CACHE) ====================
 elif menu == "💰 Entrada Mercadoria":
-    st.header("💰 Entrada de Estoque")
-    # ... resto do código ...
+    st.header("💰 Entrada de Estoque (Reposição)")
+    
+    try:
+        # Carrega produtos (usando o cache para não estourar a cota)
+        df_p = carregar_dinamico("produtos")
         
-# ==================== 6. ENTRADA MERCADORIA ====================
-elif menu == "💰 Entrada Mercadoria":
-    st.header("💰 Entrada de Estoque")
-    df_p = carregar_dinamico("produtos")
-    with st.form("form_entrada"):
-        prod_e = st.selectbox("Produto:", df_p['nome'].tolist())
-        qtd_e = st.number_input("Quantidade que chegou:", min_value=1)
-        if st.form_submit_button("Registrar Entrada"):
-            idx = df_p[df_p['nome'] == prod_e].index[0]
-            df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) + qtd_e
-            conn.update(worksheet="produtos", data=df_p)
-            st.success("Estoque Atualizado!")
+        with st.form("form_entrada", clear_on_submit=True):
+            st.info("Use este formulário para registrar a chegada de novos produtos.")
+            
+            # Seletor de produto
+            prod_e = st.selectbox("Selecione o produto que chegou:", df_p['nome'].tolist())
+            
+            # Quantidade
+            qtd_e = st.number_input("Quantidade recebida:", min_value=1, step=1)
+            
+            # Botão de envio
+            btn_confirmar = st.form_submit_button("REGISTRAR ENTRADA", use_container_width=True)
+            
+            if btn_confirmar:
+                # 1. Encontra o índice do produto na tabela
+                idx = df_p[df_p['nome'] == prod_e].index[0]
+                
+                # 2. Soma a nova quantidade ao estoque atual
+                estoque_antigo = int(df_p.at[idx, 'estoque'])
+                novo_estoque = estoque_antigo + qtd_e
+                df_p.at[idx, 'estoque'] = novo_estoque
+                
+                # 3. Atualiza no Google Sheets
+                with st.spinner("Atualizando planilha..."):
+                    conn.update(worksheet="produtos", data=df_p)
+                    
+                    # --- O SEGREDO PARA FUNCIONAR ---
+                    st.cache_data.clear() # Força o sistema a ler o novo estoque na próxima vez
+                    
+                    st.success(f"Estoque atualizado! {prod_e}: {estoque_antigo} ➔ {novo_estoque}")
+                    time.sleep(2)
+                    st.rerun()
+
+    except Exception as e:
+        if "429" in str(e):
+            st.warning("Limite de tráfego do Google atingido. Aguarde 10 segundos para tentar novamente.")
+        else:
+            st.error(f"Erro ao processar entrada: {e}")
+
+# ==================== 7. INVENTÁRIO (VISUALIZAÇÃO) ====================
+elif menu == "📦 Inventário":
+    st.header("📦 Inventário Geral")
+    try:
+        df_p = carregar_dinamico("produtos")
+        # Exibe uma tabela limpa para conferência rápida
+        st.dataframe(
+            df_p[['nome', 'estoque', 'estoque_minimo', 'preco', 'validade']], 
+            use_container_width=True, 
+            hide_index=True
+        )
+    except Exception as e:
+        st.error(f"Erro ao carregar inventário: {e}")
 
 # ==================== 7. INVENTÁRIO ====================
 elif menu == "📦 Inventário":
