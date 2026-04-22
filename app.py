@@ -13,7 +13,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 DIAS_ALERTA_VENCIMENTO = 10 
 LIMITE_ESTOQUE_BAIXO = 5
 
-# --- COLUNAS PADRÃO ---
+# --- COLUNAS PADRÃO (Certifique-se que seu Sheets tem essas colunas exatas) ---
 COLUNAS_PRODUTOS = ["nome", "estoque", "validade", "preco"]
 COLUNAS_VENDAS = ["data", "pdv", "maquina", "produto", "valor", "forma"]
 COLUNAS_MAQUINAS = ["nome_maquina", "tid", "pdv_vinculado"]
@@ -92,29 +92,18 @@ if menu == "📊 Dashboard & Alertas":
     c2.metric("Custos Totais", f"R$ {custos:,.2f}")
     c3.metric("Lucro Estimado", f"R$ {(faturamento - custos):,.2f}")
 
-    st.divider()
-    # Alertas de Estoque e Validade
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.subheader("📉 Estoque Baixo")
-        baixo = produtos[pd.to_numeric(produtos['estoque']) < LIMITE_ESTOQUE_BAIXO]
-        st.dataframe(baixo, use_container_width=True)
-    with col_b:
-        st.subheader("⚠️ Validade Próxima")
-        # Lógica simples de exibição
-        st.dataframe(produtos.sort_values(by="validade"), use_container_width=True)
-
 # ==================== 2. RELATÓRIOS POR PDV ====================
 elif menu == "📈 Relatórios por PDV":
-    st.header("📈 Relatórios Contábeis")
+    st.header("📈 Relatórios Contábeis por Unidade")
     pdvs = carregar_dados("pontos", COLUNAS_PONTOS)
     vendas = carregar_dados("vendas", COLUNAS_VENDAS)
-    pdv_sel = st.selectbox("Selecione o PDV", pdvs['nome'].unique())
+    
+    pdv_sel = st.selectbox("Selecione o PDV", pdvs['nome'].unique()) if not pdvs.empty else None
     
     if pdv_sel:
         df_pdv = vendas[vendas['pdv'] == pdv_sel]
         v_total = pd.to_numeric(df_pdv['valor'], errors='coerce').sum()
-        st.metric(f"Total {pdv_sel}", f"R$ {v_total:,.2f}")
+        st.metric(f"Total faturado em {pdv_sel}", f"R$ {v_total:,.2f}")
         st.dataframe(df_pdv, use_container_width=True)
 
 # ==================== 3. VENDA (PDV) ====================
@@ -125,95 +114,141 @@ elif menu == "🛍️ Venda (PDV)":
     maquinas = carregar_dados("maquinas", COLUNAS_MAQUINAS)
     
     with st.form("venda_form"):
-        p_sel = st.selectbox("📍 PDV", pdvs['nome'].tolist())
-        maqs_pdv = maquinas[maquinas['pdv_vinculado'] == p_sel]['nome_maquina'].tolist()
-        maq_sel = st.selectbox("📟 Máquina", maqs_pdv if maqs_pdv else ["N/A"])
-        prod_sel = st.selectbox("📦 Produto", prods['nome'].tolist())
-        qtd = st.number_input("Qtd", min_value=1)
-        forma = st.selectbox("Pagamento", ["Cartão", "Pix", "Dinheiro"])
+        p_sel = st.selectbox("📍 Selecione o PDV", pdvs['nome'].tolist()) if not pdvs.empty else "Nenhum PDV cadastrado"
+        # Filtra apenas as máquinas do PDV selecionado
+        maqs_disponiveis = maquinas[maquinas['pdv_vinculado'] == p_sel]['nome_maquina'].tolist()
+        maq_sel = st.selectbox("📟 Máquina de Cartão", maqs_disponiveis if maqs_disponiveis else ["N/A"])
         
-        if st.form_submit_button("FINALIZAR"):
-            # Atualização no Sheets (Exemplo simplificado de lógica)
-            st.success("Venda enviada ao Google Sheets!")
+        prod_sel = st.selectbox("📦 Produto", prods['nome'].tolist()) if not prods.empty else "Nenhum produto cadastrado"
+        qtd = st.number_input("Quantidade", min_value=1, value=1)
+        forma = st.selectbox("Pagamento", ["Cartão Crédito", "Cartão Débito", "Pix", "Dinheiro"])
+        
+        if st.form_submit_button("FINALIZAR VENDA"):
+            if not prods.empty and not pdvs.empty:
+                idx = prods[prods['nome'] == prod_sel].index[0]
+                estoque_atual = int(pd.to_numeric(prods.at[idx, 'estoque']))
+                
+                if estoque_atual >= qtd:
+                    valor_venda = float(prods.at[idx, 'preco']) * qtd
+                    nova_venda = pd.DataFrame([{
+                        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "pdv": p_sel,
+                        "maquina": maq_sel,
+                        "produto": prod_sel,
+                        "valor": valor_venda,
+                        "forma": forma
+                    }])
+                    
+                    # Atualiza Estoque local
+                    prods.at[idx, 'estoque'] = estoque_atual - qtd
+                    
+                    # Envia ao Sheets
+                    vendas_antigas = carregar_dados("vendas", COLUNAS_VENDAS)
+                    conn.update(worksheet="vendas", data=pd.concat([vendas_antigas, nova_venda], ignore_index=True))
+                    conn.update(worksheet="produtos", data=prods)
+                    
+                    st.cache_data.clear()
+                    st.success("Venda realizada com sucesso!")
+                    st.balloons()
+                    time.sleep(1)
+                    st.rerun()
+                else: st.error("Estoque insuficiente!")
 
 # ==================== 4. GESTÃO DE ESTOQUE ====================
 elif menu == "📦 Gestão de Estoque":
-    st.header("📦 Controle de Produtos")
+    st.header("📦 Cadastro de Itens")
     df_e = carregar_dados("produtos", COLUNAS_PRODUTOS)
-    
-    with st.expander("➕ Adicionar Novo Produto"):
+    with st.expander("➕ Novo Produto"):
         with st.form("add_p"):
-            n = st.text_input("Nome do Item")
-            e = st.number_input("Estoque Inicial", min_value=0)
-            v = st.date_input("Data de Validade")
-            p = st.number_input("Preço de Venda", min_value=0.0)
-            if st.form_submit_button("Salvar Produto"):
+            n = st.text_input("Nome")
+            e = st.number_input("Estoque", min_value=0)
+            v = st.date_input("Validade")
+            p = st.number_input("Preço Venda", min_value=0.0)
+            if st.form_submit_button("Salvar"):
                 novo = pd.DataFrame([{"nome": n, "estoque": e, "validade": v.strftime("%d/%m/%Y"), "preco": p}])
                 conn.update(worksheet="produtos", data=pd.concat([df_e, novo], ignore_index=True))
                 st.cache_data.clear()
-                st.success("Produto cadastrado!")
                 st.rerun()
-    
     st.dataframe(df_e, use_container_width=True)
 
 # ==================== 5. LANÇAMENTO DE CUSTOS ====================
 elif menu == "💰 Lançamento de Custos":
-    st.header("💰 Entrada de Mercadorias")
+    st.header("💰 Entrada de Mercadoria")
     df_forn = carregar_dados("fornecedores", COLUNAS_FORNECEDORES)
     df_prod = carregar_dados("produtos", COLUNAS_PRODUTOS)
     df_comp = carregar_dados("compras", COLUNAS_COMPRAS)
 
     with st.form("compra_form"):
-        f_sel = st.selectbox("Fornecedor", df_forn['nome_fantasia'].tolist() if not df_forn.empty else [])
-        p_sel = st.selectbox("Produto", df_prod['nome'].tolist() if not df_prod.empty else [])
-        q_compra = st.number_input("Quantidade Comprada", min_value=1)
-        v_unit = st.number_input("Custo Unitário (R$)", min_value=0.01)
-        
-        if st.form_submit_button("Registrar Compra e Atualizar Estoque"):
-            # 1. Registrar a Compra
-            nova_compra = pd.DataFrame([{
-                "data": datetime.now().strftime("%d/%m/%Y"),
-                "fornecedor": f_sel,
-                "produto": p_sel,
-                "quantidade": q_compra,
-                "custo_unitario": v_unit,
-                "custo_total": q_compra * v_unit
-            }])
-            
-            # 2. Atualizar o estoque na tabela de produtos
+        f_sel = st.selectbox("Fornecedor", df_forn['nome_fantasia'].tolist()) if not df_forn.empty else []
+        p_sel = st.selectbox("Produto", df_prod['nome'].tolist()) if not df_prod.empty else []
+        q_compra = st.number_input("Qtd", min_value=1)
+        v_unit = st.number_input("Custo Unitário", min_value=0.01)
+        if st.form_submit_button("Registrar Entrada"):
+            nova_compra = pd.DataFrame([{"data": datetime.now().strftime("%d/%m/%Y"), "fornecedor": f_sel, "produto": p_sel, "quantidade": q_compra, "custo_unitario": v_unit, "custo_total": q_compra * v_unit}])
             idx = df_prod[df_prod['nome'] == p_sel].index[0]
-            df_prod.at[idx, 'estoque'] = pd.to_numeric(df_prod.at[idx, 'estoque']) + q_compra
-            
-            # Salvar ambos
+            df_prod.at[idx, 'estoque'] = int(pd.to_numeric(df_prod.at[idx, 'estoque'])) + q_compra
             conn.update(worksheet="compras", data=pd.concat([df_comp, nova_compra], ignore_index=True))
             conn.update(worksheet="produtos", data=df_prod)
-            
             st.cache_data.clear()
-            st.success(f"Estoque de {p_sel} atualizado para {df_prod.at[idx, 'estoque']}!")
+            st.success("Estoque Atualizado!")
             st.rerun()
-
-    st.subheader("Histórico de Compras")
     st.dataframe(df_comp, use_container_width=True)
 
 # ==================== 6. FORNECEDORES ====================
 elif menu == "🚚 Fornecedores":
-    st.header("🚚 Meus Fornecedores")
+    st.header("🚚 Cadastro de Parceiros")
     df_f = carregar_dados("fornecedores", COLUNAS_FORNECEDORES)
-    
     with st.form("f_form"):
         nf = st.text_input("Nome Fantasia")
-        cnpj = st.text_input("CNPJ ou CPF")
-        if st.form_submit_button("Cadastrar Fornecedor"):
-            novo_f = pd.DataFrame([{"nome_fantasia": nf, "cnpj_cpf": cnpj}])
-            conn.update(worksheet="fornecedores", data=pd.concat([df_f, novo_f], ignore_index=True))
+        cnpj = st.text_input("CNPJ/CPF")
+        if st.form_submit_button("Cadastrar"):
+            conn.update(worksheet="fornecedores", data=pd.concat([df_f, pd.DataFrame([{"nome_fantasia": nf, "cnpj_cpf": cnpj}])], ignore_index=True))
             st.cache_data.clear()
-            st.success("Fornecedor salvo!")
             st.rerun()
-            
     st.dataframe(df_f, use_container_width=True)
 
-# ==================== 7. MÁQUINAS & PDVs ====================
+# ==================== 7. MÁQUINAS & PDVs (CÓDIGO COMPLETO AQUI) ====================
 elif menu == "📟 Máquinas & PDVs":
-    # (Mantido conforme a versão anterior para cadastro de máquinas por PDV)
-    st.header("📟 Configuração de Unidades")
-    # ... código de cadastro de PDV e Máquina ...
+    st.header("📟 Gestão de Terminais e Unidades")
+    
+    col1, col2 = st.columns(2)
+    
+    # Bloco de Unidades (PDVs)
+    with col1:
+        st.subheader("📍 Cadastrar Unidade (PDV)")
+        df_p = carregar_dados("pontos", COLUNAS_PONTOS)
+        with st.form("pdv_form"):
+            novo_pdv = st.text_input("Nome da Unidade (Ex: Condomínio Jatobá)")
+            if st.form_submit_button("Adicionar Unidade"):
+                if novo_pdv:
+                    novo_df_p = pd.concat([df_p, pd.DataFrame([{"nome": novo_pdv}])], ignore_index=True)
+                    conn.update(worksheet="pontos", data=novo_df_p)
+                    st.cache_data.clear()
+                    st.success(f"Unidade {novo_pdv} adicionada!")
+                    time.sleep(1)
+                    st.rerun()
+
+    # Bloco de Máquinas de Cartão
+    with col2:
+        st.subheader("📟 Cadastrar Máquina de Cartão")
+        df_m = carregar_dados("maquinas", COLUNAS_MAQUINAS)
+        with st.form("maquina_form"):
+            nome_maquina = st.text_input("Nome/Apelido da Máquina")
+            tid = st.text_input("Número de Série / TID")
+            # Só permite selecionar PDVs que já existem
+            pdv_vinc = st.selectbox("Vincular ao PDV", df_p['nome'].tolist() if not df_p.empty else ["Cadastre um PDV primeiro"])
+            
+            if st.form_submit_button("Salvar Máquina"):
+                if nome_maquina and not df_p.empty:
+                    nova_maq = pd.DataFrame([{"nome_maquina": nome_maquina, "tid": tid, "pdv_vinculado": pdv_vinc}])
+                    novo_df_m = pd.concat([df_m, nova_maq], ignore_index=True)
+                    conn.update(worksheet="maquinas", data=novo_df_m)
+                    st.cache_data.clear()
+                    st.success(f"Máquina {nome_maquina} vinculada a {pdv_vinc}!")
+                    time.sleep(1)
+                    st.rerun()
+
+    st.divider()
+    st.subheader("📋 Lista de Máquinas Ativas")
+    st.dataframe(carregar_dados("maquinas", COLUNAS_MAQUINAS), use_container_width=True)
+    
