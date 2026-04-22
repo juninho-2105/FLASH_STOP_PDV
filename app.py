@@ -157,144 +157,26 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT (BIPOU + MANUAL) ====================
+# ==================== 5. SELF-CHECKOUT ====================
 elif menu == "🛒 Self-Checkout":
-    hora_atual = datetime.now().hour
-    if hora_atual < 12: saudacao = "Bom dia"
-    elif hora_atual < 18: saudacao = "Boa tarde"
-    else: saudacao = "Boa noite"
-
-    st.header(f"🛒 {saudacao}! Bem-vindo à Flash Stop")
+    # 1. LOGO CENTRALIZADO (Apenas nesta página)
+    # Crie colunas para centralizar a imagem no meio da tela
+    col_logo_1, col_logo_2, col_logo_3 = st.columns([1, 2, 1])
     
-    try:
-        # Busca produtos (usando o cache para evitar erro 429)
-        df_p = carregar_dinamico("produtos")
-        
-        col_esq, col_dir = st.columns([1.2, 1.3])
+    with col_logo_2:
+        # Substitua 'logo.png' pelo caminho do seu arquivo ou URL da imagem
+        # use_container_width garante que ele se ajuste ao tablet
+        try:
+            st.image("logo_flash_stop.png", use_container_width=True)
+        except:
+            # Caso a imagem ainda não esteja na pasta, exibe o nome estilizado
+            st.markdown("<h1 style='text-align: center; color: #2e7d32;'>FLASH STOP</h1>", unsafe_allow_html=True)
 
-        with col_esq:
-            # Criamos duas abas para o cliente escolher o modo de entrada
-            aba_scan, aba_manual = st.tabs(["📟 BIPAR PRODUTO", "🔍 BUSCA MANUAL"])
-            
-            prods_ativos = df_p[df_p['estoque'].astype(int) > 0]
-            lista_nomes = [""] + prods_ativos['nome'].tolist()
+    st.markdown("<h4 style='text-align: center; opacity: 0.7;'>Mini Mercado Inteligente</h4>", unsafe_allow_html=True)
+    st.divider()
 
-            # --- MODO 1: SCANNER (BIPOU-ENTROU) ---
-            with aba_scan:
-                sel_scan = st.selectbox("Aponte o leitor:", lista_nomes, key="scan_input")
-                if sel_scan:
-                    d = df_p[df_p['nome'] == sel_scan].iloc[0]
-                    preco_unit = float(d['preco'])
-                    
-                    # Lógica de somar ao carrinho
-                    item_existente = False
-                    for idx, item in enumerate(st.session_state.carrinho):
-                        if item['item'] == sel_scan:
-                            st.session_state.carrinho[idx]['qtd'] += 1
-                            st.session_state.carrinho[idx]['total'] = st.session_state.carrinho[idx]['qtd'] * preco_unit
-                            item_existente = True
-                            break
-                    
-                    if not item_existente:
-                        st.session_state.carrinho.append({"item": sel_scan, "qtd": 1, "preco": preco_unit, "total": preco_unit})
-                    
-                    st.toast(f"✅ {sel_scan} adicionado!")
-                    time.sleep(0.3)
-                    st.rerun()
-
-            # --- MODO 2: MANUAL (PESQUISA + BOTÃO) ---
-            with aba_manual:
-                sel_man = st.selectbox("Procure o produto pelo nome:", lista_nomes, key="man_input")
-                if sel_man:
-                    d_man = df_p[df_p['nome'] == sel_man].iloc[0]
-                    st.write(f"Preço Unitário: **R$ {float(d_man['preco']):.2f}**")
-                    qtd_man = st.number_input("Quantidade:", min_value=1, max_value=int(d_man['estoque']), value=1, key="qtd_man")
-                    
-                    if st.button("➕ ADICIONAR MANUALMENTE", use_container_width=True):
-                        preco_unit_man = float(d_man['preco'])
-                        
-                        item_existente = False
-                        for idx, item in enumerate(st.session_state.carrinho):
-                            if item['item'] == sel_man:
-                                st.session_state.carrinho[idx]['qtd'] += qtd_man
-                                st.session_state.carrinho[idx]['total'] = st.session_state.carrinho[idx]['qtd'] * preco_unit_man
-                                item_existente = True
-                                break
-                        
-                        if not item_existente:
-                            st.session_state.carrinho.append({"item": sel_man, "qtd": qtd_man, "preco": preco_unit_man, "total": preco_unit_man * qtd_man})
-                        
-                        st.success(f"{sel_man} adicionado!")
-                        time.sleep(0.5)
-                        st.rerun()
-
-        with col_dir:
-            st.subheader("🛍️ Seu Carrinho")
-            if st.session_state.carrinho:
-                v_total_compra = 0
-                for i, item in enumerate(st.session_state.carrinho):
-                    v_total_compra += item['total']
-                    c_nome, c_menos, c_qtd, c_mais = st.columns([3, 1, 1, 1])
-                    c_nome.write(f"**{item['item']}**\n(R$ {item['preco']:.2f})")
-                    
-                    if c_menos.button("➖", key=f"min_{i}"):
-                        if item['qtd'] > 1:
-                            st.session_state.carrinho[i]['qtd'] -= 1
-                            st.session_state.carrinho[i]['total'] = st.session_state.carrinho[i]['qtd'] * item['preco']
-                        else:
-                            st.session_state.carrinho.pop(i)
-                        st.rerun()
-                    c_qtd.write(f"**{item['qtd']}**")
-                    if c_mais.button("➕", key=f"add_{i}"):
-                        estoque_dis = int(df_p[df_p['nome'] == item['item']].iloc[0]['estoque'])
-                        if item['qtd'] < estoque_dis:
-                            st.session_state.carrinho[i]['qtd'] += 1
-                            st.session_state.carrinho[i]['total'] = st.session_state.carrinho[i]['qtd'] * item['preco']
-                            st.rerun()
-
-                st.divider()
-                st.markdown(f"## TOTAL: R$ {v_total_compra:.2f}")
-
-                st.subheader("💳 Pagamento")
-                forma = st.radio("Escolha a forma:", ["Pix", "Débito", "Crédito"], horizontal=True)
-                
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    if st.button("❌ CANCELAR", use_container_width=True):
-                        st.session_state.carrinho = []
-                        st.rerun()
-                with col_btn2:
-                    if st.button("✅ FINALIZAR", type="primary", use_container_width=True):
-                        with st.spinner("Finalizando..."):
-                            agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-                            v_novas = []
-                            for it in st.session_state.carrinho:
-                                v_liq = it['total'] * 0.97 
-                                v_novas.append({
-                                    "data": agora, "pdv": st.session_state.unidade, "produto": it['item'],
-                                    "valor_bruto": it['total'], "valor_liquido": v_liq, "forma": forma
-                                })
-                                idx_est = df_p[df_p['nome'] == it['item']].index[0]
-                                df_p.at[idx_est, 'estoque'] = int(df_p.at[idx_est, 'estoque']) - it['qtd']
-                            
-                            df_v_atual = carregar_dinamico("vendas")
-                            conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(v_novas)], ignore_index=True))
-                            conn.update(worksheet="produtos", data=df_p)
-                            st.cache_data.clear()
-                            st.session_state.carrinho = []
-                            st.success("Obrigado!")
-                            st.balloons()
-                            time.sleep(3)
-                            st.rerun()
-            else:
-                st.info("Escolha uma opção ao lado para começar.")
-    
-    except Exception as e:
-        if "429" in str(e):
-            st.warning("Aguarde alguns segundos (limite de tráfego)...")
-        else:
-            st.error(f"Erro: {e}")
-
+    # --- RESTO DO CÓDIGO DO CHECKOUT (BUSCA E CARRINHO EMBAIXO) ---
+    # (Mantenha a estrutura de colunas que fizemos anteriormente aqui)
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
 elif menu == "💸 Despesas":
     st.header("💸 Registro de Custos e Despesas")
