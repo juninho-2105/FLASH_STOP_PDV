@@ -276,7 +276,21 @@ elif menu == "🛒 Self-Checkout":
         else:
             st.error(f"Erro: {e}")
 
-# ==================== 6. ENTRADA E CADASTRO (COM CÁLCULO DINÂMICO) ====================
+# ==================== 6. CUSTOS FIXOS ====================
+elif menu == "📈 Custos Fixos":
+    st.header("📈 Despesas Operacionais")
+    df_d, df_pts = carregar("despesas"), carregar("pontos")
+    with st.form("f_d"):
+        p = st.selectbox("PDV", df_pts['nome'].tolist())
+        d = st.text_input("Descrição")
+        v = st.number_input("Valor", min_value=0.0)
+        if st.form_submit_button("Salvar"):
+            nova = pd.DataFrame([{"pdv": p, "descricao": d, "valor": v, "vencimento": datetime.now().strftime("%d/%m/%Y")}])
+            conn.update(worksheet="despesas", data=pd.concat([df_d, nova], ignore_index=True))
+            st.success("Salvo com sucesso!"); st.rerun()
+    st.dataframe(df_d, use_container_width=True)
+
+# ==================== 7. ENTRADA E CADASTRO (COM CÁLCULO DINÂMICO) ====================
 elif menu == "💰 Entrada Mercadoria":
     st.header("💰 Gestão de Estoque e Preços")
     
