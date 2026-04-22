@@ -144,37 +144,103 @@ if menu == "📊 Dashboard":
             st.table(vencendo)
         else:
             st.success("✅ Validades OK!")
-# ==================== 5. SELF-CHECKOUT ====================
+            
+# ==================== 5. SELF-CHECKOUT (VERSÃO PREMIUM ATRAENTE) ====================
 elif menu == "🛍️ Self-Checkout":
-    st.markdown(f"<h2 style='text-align: center;'>🛒 Checkout - {st.session_state.pdv_atual if st.session_state.pdv_atual else 'Modo Admin'}</h2>", unsafe_allow_html=True)
-    df_p, df_m, df_pts = carregar("produtos"), carregar("maquinas"), carregar("pontos")
-    v_pdv = st.session_state.pdv_atual if st.session_state.perfil == "cliente" else st.selectbox("Selecione PDV para teste:", df_pts['nome'].tolist())
+    # 1. Saudação Dinâmica
+    hora_agora = datetime.now().hour
+    if hora_agora < 12:
+        saudacao = "Bom dia! ☕"
+    elif hora_agora < 18:
+        saudacao = "Boa tarde! ☀️"
+    else:
+        saudacao = "Boa noite! 🌙"
 
-    col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
-    with col_c2:
+    # Cabeçalho Centralizado
+    st.markdown(f"<h3 style='text-align: center; color: #555;'>{saudacao}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align: center; margin-top: -15px;'>Bem-vindo à Flash Stop - {st.session_state.pdv_atual if st.session_state.pdv_atual else 'Unidade Central'}</h2>", unsafe_allow_html=True)
+    
+    df_p, df_m, df_pts = carregar("produtos"), carregar("maquinas"), carregar("pontos")
+    
+    # Identifica o PDV logado
+    v_pdv = st.session_state.pdv_atual if st.session_state.perfil == "cliente" else st.selectbox("Simular PDV (Admin):", df_pts['nome'].tolist())
+
+    st.divider()
+
+    # Layout em colunas para centralizar o carrinho
+    col_v1, col_v2, col_v3 = st.columns([0.5, 2, 0.5])
+
+    with col_v2:
         with st.container(border=True):
-            v_prod = st.selectbox("Escolha o Produto:", [""] + df_p['nome'].tolist())
-            v_qtd = st.number_input("Qtd:", min_value=1, step=1)
+            st.markdown("#### 🔍 Selecione ou Bipe o Produto")
+            v_prod = st.selectbox("Procure pelo nome ou código:", [""] + df_p['nome'].tolist(), label_visibility="collapsed")
+            
+            c_qtd, c_vazio = st.columns([1, 2])
+            v_qtd = c_qtd.number_input("Quantidade:", min_value=1, step=1, value=1)
+            
             if v_prod != "":
-                p_u = float(df_p[df_p['nome'] == v_prod].iloc[0]['preco'])
-                total = p_u * v_qtd
-                st.markdown(f"<h1 style='text-align:center; color:#7CFC00;'>R$ {total:,.2f}</h1>", unsafe_allow_html=True)
-                v_forma = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
-                if st.button("✅ FINALIZAR VENDA", use_container_width=True, type="primary"):
+                # Busca preço e estoque
+                prod_info = df_p[df_p['nome'] == v_prod].iloc[0]
+                p_unitario = float(prod_info['preco'])
+                total_compra = p_unitario * v_qtd
+                
+                # Card de Preço de Destaque
+                st.markdown(f"""
+                    <div style="background-color: #f0f2f6; padding: 20px; border-radius: 15px; border-left: 8px solid #7CFC00; margin: 15px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #666;">Total a pagar:</p>
+                        <h1 style="margin: 0; color: #000; font-size: 45px;">R$ {total_compra:,.2f}</h1>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("#### 💳 Forma de Pagamento")
+                v_forma = st.radio("Selecione como deseja pagar:", ["Pix", "Débito", "Crédito"], horizontal=True)
+                
+                st.write("") # Espaçador
+
+                if st.button("🔥 FINALIZAR E PAGAR", use_container_width=True, type="primary"):
+                    # Lógica de cálculo de taxas
                     maqs = df_m[df_m['pdv_vinculado'] == v_pdv]['nome_maquina'].tolist()
-                    m_n = maqs[0] if maqs else "Dinheiro"
+                    m_nome = maqs[0] if maqs else "Dinheiro"
+                    
                     idx = df_p[df_p['nome'] == v_prod].index[0]
                     taxa = 0.0
-                    if m_n != "Dinheiro":
-                        md = df_m[df_m['nome_maquina'] == m_n].iloc[0]
-                        taxa = md['taxa_pix'] if v_forma == "Pix" else md['taxa_debito'] if v_forma == "Débito" else md['taxa_credito']
-                    v_liq = total * (1 - (taxa/100))
+                    
+                    if m_nome != "Dinheiro":
+                        m_dados = df_m[df_m['nome_maquina'] == m_nome].iloc[0]
+                        if v_forma == "Pix": taxa = m_dados['taxa_pix']
+                        elif v_forma == "Débito": taxa = m_dados['taxa_debito']
+                        else: taxa = m_dados['taxa_credito']
+                    
+                    v_liquido = total_compra * (1 - (taxa/100))
+                    
+                    # Atualiza Estoque na memória
                     df_p.at[idx, 'estoque'] -= v_qtd
-                    venda = pd.DataFrame([{"data": datetime.now().strftime("%d/%m/%Y %H:%M"), "pdv": v_pdv, "maquina": m_n, "produto": v_prod, "valor_bruto": total, "valor_liquido": v_liq, "forma": v_forma}])
-                    conn.update(worksheet="vendas", data=pd.concat([carregar("vendas"), venda], ignore_index=True))
+                    
+                    # Registra a Venda
+                    nova_venda = pd.DataFrame([{
+                        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "pdv": v_pdv,
+                        "maquina": m_nome,
+                        "produto": v_prod,
+                        "valor_bruto": total_compra,
+                        "valor_liquido": v_liquido,
+                        "forma": v_forma
+                    }])
+                    
+                    # Salva no Google Sheets
+                    conn.update(worksheet="vendas", data=pd.concat([carregar("vendas"), nova_venda], ignore_index=True))
                     conn.update(worksheet="produtos", data=df_p)
-                    st.balloons(); st.success("Compra finalizada com sucesso!"); time.sleep(1); st.rerun()
+                    
+                    # Efeito Visual de Sucesso
+                    st.balloons()
+                    st.success(f"Obrigado! Compra de R$ {total_compra:,.2f} realizada com sucesso.")
+                    time.sleep(2)
+                    st.rerun()
+            else:
+                # Mensagem amigável enquanto não seleciona nada
+                st.info("Aguardando você selecionar um produto...")
 
+    st.markdown("<p style='text-align: center; color: #999; font-size: 12px;'>⚡ Flash Stop - Tecnologia em Conveniência</p>", unsafe_allow_html=True)
 # ==================== 6. CUSTOS FIXOS ====================
 elif menu == "📈 Custos Fixos":
     st.header("📈 Registro de Despesas")
