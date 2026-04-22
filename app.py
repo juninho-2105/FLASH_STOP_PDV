@@ -419,19 +419,47 @@ elif menu == "💰 Entrada Mercadoria":
     except Exception as e:
         st.error(f"Erro na operação: {e}")
 
-# ==================== 7. INVENTÁRIO ====================
+# ==================== 8. INVENTÁRIO ====================
 elif menu == "📦 Inventário":
-    st.header("📦 Gestão de Itens")
-    df_p = carregar("produtos")
-    st.dataframe(df_p, use_container_width=True)
+    st.header("📦 Gestão de Itens e Alertas")
+    
+    # CORREÇÃO: Chamando a função correta 'carregar_dinamico'
+    df_p = carregar_dinamico("produtos")
+    
     if not df_p.empty:
-        with st.form("f_i"):
-            p_sel = st.selectbox("Ajustar Limite de:", df_p['nome'].tolist())
-            n_min = st.number_input("Novo Mínimo", min_value=0)
-            if st.form_submit_button("Salvar Limite"):
+        # Visualização Geral
+        st.subheader("Estoque Atual")
+        st.dataframe(df_p, use_container_width=True, hide_index=True)
+        
+        st.divider()
+        
+        # Ajuste de Estoque Mínimo (Alerta de Reposição)
+        st.subheader("Configurar Alerta de Estoque Mínimo")
+        st.info("Defina a quantidade mínima para que o produto apareça no alerta do Dashboard.")
+        
+        with st.form("f_inventario"):
+            col_sel, col_qtd = st.columns([2, 1])
+            
+            with col_sel:
+                p_sel = st.selectbox("Selecione o Produto:", df_p['nome'].tolist())
+            
+            with col_qtd:
+                # Busca o valor atual para mostrar como padrão
+                estoque_min_atual = int(df_p[df_p['nome'] == p_sel]['estoque_minimo'].values[0])
+                n_min = st.number_input("Novo Limite Mínimo:", min_value=0, value=estoque_min_atual)
+            
+            if st.form_submit_button("Atualizar Limite de Segurança", use_container_width=True):
                 idx = df_p[df_p['nome'] == p_sel].index[0]
                 df_p.at[idx, 'estoque_minimo'] = n_min
-                conn.update(worksheet="produtos", data=df_p); st.success("Limite atualizado!"); st.rerun()
+                
+                with st.spinner("Salvando alterações..."):
+                    conn.update(worksheet="produtos", data=df_p)
+                    st.cache_data.clear()
+                    st.success(f"Limite de segurança para {p_sel} atualizado com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
+    else:
+        st.warning("Nenhum produto encontrado na base de dados.")
 
 # ==================== 8. CONTABILIDADE ====================
 elif menu == "📂 Contabilidade":
