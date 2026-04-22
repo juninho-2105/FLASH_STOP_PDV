@@ -157,14 +157,13 @@ elif menu == "🛒 Self-Checkout":
             prods_ativos = df_p[df_p['estoque'].astype(int) > 0]
             lista_nomes = [""] + prods_ativos['nome'].tolist()
             
-            # Campo de entrada para o leitor de código de barras
             sel = st.selectbox("Aponte o leitor para o código:", lista_nomes, key="leitor_ba")
             
             if sel:
                 d = df_p[df_p['nome'] == sel].iloc[0]
                 preco_unit = float(d['preco'])
                 
-                # Verifica se o item já está no carrinho para apenas somar a quantidade
+                # Verifica se o item já está no carrinho
                 item_no_carrinho = False
                 for idx, item in enumerate(st.session_state.carrinho):
                     if item['item'] == sel:
@@ -187,7 +186,6 @@ elif menu == "🛒 Self-Checkout":
             if st.session_state.carrinho:
                 v_total_compra = 0
                 
-                # Exibe cada item com botões de controle
                 for i, item in enumerate(st.session_state.carrinho):
                     v_total_compra += item['total']
                     c_nome, c_menos, c_qtd, c_mais = st.columns([3, 1, 1, 1])
@@ -205,19 +203,17 @@ elif menu == "🛒 Self-Checkout":
                     c_qtd.write(f"**{item['qtd']}**")
                     
                     if c_mais.button("➕", key=f"add_{i}"):
-                        # Verifica estoque antes de somar
-                        estoque_disponivel = int(df_p[df_p['nome'] == item['item']].iloc[0]['estoque'])
-                        if item['qtd'] < estoque_disponivel:
+                        estoque_dis = int(df_p[df_p['nome'] == item['item']].iloc[0]['estoque'])
+                        if item['qtd'] < estoque_dis:
                             st.session_state.carrinho[i]['qtd'] += 1
                             st.session_state.carrinho[i]['total'] = st.session_state.carrinho[i]['qtd'] * item['preco']
                             st.rerun()
                         else:
-                            st.error("Limite de estoque atingido.")
+                            st.error("Sem estoque")
 
                 st.divider()
                 st.markdown(f"## TOTAL: R$ {v_total_compra:.2f}")
 
-                # --- PAGAMENTO E CANCELAMENTO ---
                 st.subheader("💳 Pagamento")
                 forma = st.radio("Escolha a forma:", ["Pix", "Débito", "Crédito"], horizontal=True)
                 
@@ -229,7 +225,6 @@ elif menu == "🛒 Self-Checkout":
                 with col_btn2:
                     if st.button("✅ FINALIZAR", type="primary", use_container_width=True):
                         with st.spinner("Finalizando..."):
-                            # Lógica de salvamento idêntica à anterior
                             agora = datetime.now().strftime("%d/%m/%Y %H:%M")
                             v_novas = []
                             for it in st.session_state.carrinho:
@@ -238,20 +233,29 @@ elif menu == "🛒 Self-Checkout":
                                     "data": agora, "pdv": st.session_state.unidade, "produto": it['item'],
                                     "valor_bruto": it['total'], "valor_liquido": v_liq, "forma": forma
                                 })
-                                idx_estoque = df_p[df_p['nome'] == it['item']].index[0]
-                                df_p.at[idx_estoque, 'estoque'] = int(df_p.at[idx_estoque, 'estoque']) - it['qtd']
+                                idx_est = df_p[df_p['nome'] == it['item']].index[0]
+                                df_p.at[idx_est, 'estoque'] = int(df_p.at[idx_est, 'estoque']) - it['qtd']
                             
                             df_v_atual = carregar_dinamico("vendas")
                             conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(v_novas)], ignore_index=True))
                             conn.update(worksheet="produtos", data=df_p)
                             
                             st.session_state.carrinho = []
-                            st.success("Obrigado! Tenha um excelente dia.")
+                            st.success("Obrigado!")
                             st.balloons()
                             time.sleep(3)
                             st.rerun()
             else:
                 st.info("Passe o produto no leitor para começar.")
+    
+    # --- ESTA É A PARTE QUE FALTAVA (FECHAMENTO DO TRY) ---
+    except Exception as e:
+        st.error(f"Erro no sistema: {e}")
+
+# ==================== 6. ENTRADA MERCADORIA ====================
+elif menu == "💰 Entrada Mercadoria":
+    st.header("💰 Entrada de Estoque")
+    # ... resto do código ...
         
 # ==================== 6. ENTRADA MERCADORIA ====================
 elif menu == "💰 Entrada Mercadoria":
