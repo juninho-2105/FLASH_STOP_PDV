@@ -49,41 +49,43 @@ if not st.session_state.autenticado:
                 st.error("Usuário não encontrado.")
     st.stop()
 
-# ==================== 3. NAVEGAÇÃO E LOGICA DE TELAS ====================
+# ==================== NAVEGAÇÃO PRINCIPAL ====================
 
-# Primeiro, verificamos as opções do menu que você definiu no sidebar.radio
 if menu == "📊 Dashboard":
-    # ... código do dashboard ...
+    # Código do Dashboard
     pass
 
 elif menu == "🛒 Self-Checkout":
-    # ... código do checkout ...
+    # Código do Checkout
     pass
 
 elif menu == "💰 Entrada Mercadoria":
-    # ... código de entrada ...
+    # Código de Entrada
     pass
 
 elif menu == "📦 Inventário":
-    # ... código de inventário ...
+    # Código de Inventário
     pass
 
-# O SEU ERRO ESTAVA AQUI: O 'elif' abaixo não pode ter um 'else' antes dele
+# O ERRO ACONTECEU AQUI: Certifique-se de que NÃO existe um "else:" antes desta linha
 elif menu == "💸 Despesas":
     st.header("💸 Gestão de Despesas")
-    # ... seu código de despesas que geramos anteriormente ...
+    # Código de Despesas
+    pass
 
 elif menu == "📂 Contabilidade":
-    # ... código de contabilidade ...
+    # Código de Contabilidade
     pass
 
 elif menu == "📟 Configurações":
-    # ... código de configurações ...
+    # Código de Configurações
     pass
 
-# O 'else' só entra aqui se você quiser uma página padrão de erro ou boas-vindas
+# Opcional: O "else" só pode vir aqui, no final de tudo!
 else:
-    st.write("Selecione uma opção no menu lateral.")
+    st.info("Selecione uma opção no menu.")
+
+
 # ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Performance Financeira")
