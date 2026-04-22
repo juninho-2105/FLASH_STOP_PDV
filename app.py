@@ -366,23 +366,69 @@ elif menu == "📂 Contabilidade":
             with col_btn2:
                 if st.button("🖨️ PREPARAR PARA IMPRIMIR", use_container_width=True):
                     st.toast("Use Ctrl+P para imprimir a tela agora!", icon="🖨️")
-# ==================== 10. CONFIGURAÇÕES ====================
+# ==================== 10. CONFIGURAÇÕES (COM EXCLUSÃO DE PDV) ====================
 elif menu == "📟 Configurações":
-    st.header("📟 Gerenciar Unidades")
-    df_pts, df_m = carregar_dinamico("pontos"), carregar_dinamico("maquinas")
-    t1, t2 = st.tabs(["PDVs", "Máquinas"])
+    st.header("📟 Gestão de Unidades e Equipamentos")
+    df_pts = carregar_dinamico("pontos")
+    df_m = carregar_dinamico("maquinas")
+    
+    t1, t2 = st.tabs(["📍 Gerenciar PDVs", "💳 Maquininhas"])
+    
     with t1:
-        with st.form("f_pts"):
-            n_p, s_p = st.text_input("Nome PDV"), st.text_input("Senha")
-            if st.form_submit_button("Add PDV"):
-                conn.update(worksheet="pontos", data=pd.concat([df_pts, pd.DataFrame([{"nome": n_p, "senha": s_p}])], ignore_index=True)); st.rerun()
-        st.table(df_pts)
+        st.subheader("Cadastro de Novas Unidades")
+        with st.form("f_novo_pdv", clear_on_submit=True):
+            n_p = st.text_input("Nome da Unidade (Ex: Condomínio X)")
+            s_p = st.text_input("Senha de Acesso", type="password")
+            if st.form_submit_button("➕ Cadastrar Unidade"):
+                if n_p and s_p:
+                    novo_p = pd.DataFrame([{"nome": n_p, "senha": s_p}])
+                    conn.update(worksheet="pontos", data=pd.concat([df_pts, novo_p], ignore_index=True))
+                    st.success(f"Unidade {n_p} cadastrada!")
+                    time.sleep(1); st.rerun()
+                else:
+                    st.error("Preencha nome e senha.")
+
+        st.divider()
+        st.subheader("Unidades Ativas")
+        if not df_pts.empty:
+            # Criamos uma lista para exibir com opção de exclusão
+            for i, row in df_pts.iterrows():
+                col_n, col_s, col_ex = st.columns([3, 2, 1])
+                col_n.write(f"**{row['nome']}**")
+                col_s.write(f"Senha: `****`" if st.session_state.perfil != "admin" else f"Senha: `{row['senha']}`")
+                
+                # Botão de Excluir com confirmação simples
+                if col_ex.button("🗑️", key=f"del_pdv_{i}", help=f"Excluir {row['nome']}"):
+                    df_pts_novo = df_pts.drop(i)
+                    conn.update(worksheet="pontos", data=df_pts_novo)
+                    st.warning(f"Unidade {row['nome']} removida.")
+                    time.sleep(1); st.rerun()
+        else:
+            st.info("Nenhuma unidade cadastrada.")
+
     with t2:
-        with st.form("f_m"):
-            mn, mv = st.text_input("Nome Máquina"), st.selectbox("Vincular", df_pts['nome'].tolist())
+        st.subheader("Configurar Meios de Pagamento")
+        with st.form("f_maquina"):
+            mn = st.text_input("Nome/Modelo da Máquina")
+            mv = st.selectbox("Vincular ao PDV:", df_pts['nome'].tolist() if not df_pts.empty else ["Nenhum PDV cadastrado"])
             c1, c2, c3 = st.columns(3)
-            txp, txd, txc = c1.number_input("Pix %"), c2.number_input("Débito %"), c3.number_input("Crédito %")
-            if st.form_submit_button("Add Máquina"):
-                n_m = pd.DataFrame([{"nome_maquina": mn, "pdv_vinculado": mv, "taxa_debito": txd, "taxa_credito": txc, "taxa_pix": txp}])
-                conn.update(worksheet="maquinas", data=pd.concat([df_m, n_m], ignore_index=True)); st.rerun()
-        st.table(df_m)
+            txp = c1.number_input("Taxa Pix (%)", min_value=0.0, step=0.01)
+            txd = c2.number_input("Taxa Débito (%)", min_value=0.0, step=0.01)
+            txc = c3.number_input("Taxa Crédito (%)", min_value=0.0, step=0.01)
+            
+            if st.form_submit_button("➕ Vincular Máquina"):
+                nova_m = pd.DataFrame([{"nome_maquina": mn, "pdv_vinculado": mv, "taxa_debito": txd, "taxa_credito": txc, "taxa_pix": txp}])
+                conn.update(worksheet="maquinas", data=pd.concat([df_m, nova_m], ignore_index=True))
+                st.success("Máquina vinculada!"); time.sleep(1); st.rerun()
+        
+        st.divider()
+        st.write("Máquinas Ativas:")
+        st.dataframe(df_m, use_container_width=True, hide_index=True)
+        
+        # Opcional: Excluir máquina também
+        if not df_m.empty:
+            m_para_excluir = st.selectbox("Remover Máquina:", [""] + df_m['nome_maquina'].tolist())
+            if st.button("🗑️ Remover Máquina Selecionada"):
+                df_m_novo = df_m[df_m['nome_maquina'] != m_para_excluir]
+                conn.update(worksheet="maquinas", data=df_m_novo)
+                st.rerun()
