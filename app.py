@@ -76,23 +76,74 @@ with st.sidebar:
         st.session_state.auth = False
         st.rerun()
 
-# ==================== 4. DASHBOARD ====================
+# ==================== 4. DASHBOARD (COM ALERTAS E GRÁFICO) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Performance Flash Stop")
-    df_v, df_d = carregar("vendas"), carregar("despesas")
+    df_v, df_d, df_p = carregar("vendas"), carregar("despesas"), carregar("produtos")
+    
+    # --- CÁLCULOS FINANCEIROS ---
     bruto = df_v['valor_bruto'].sum()
     liq = df_v['valor_liquido'].sum()
     gastos = df_d['valor'].sum()
     cashback = bruto * 0.02
     resultado = liq - gastos - cashback
 
+    # --- MÉTRICAS ---
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Bruto", f"R$ {bruto:,.2f}")
+    c1.metric("Bruto Total", f"R$ {bruto:,.2f}")
     c2.metric("Líquido", f"R$ {liq:,.2f}")
     c3.metric("Custos Fixos", f"R$ {gastos:,.2f}")
-    c4.metric("Cashback (2%)", f"R$ {cashback:,.2f}")
+    c4.metric("Cashback (2%)", f"R$ {cashback:,.2f}", delta=f"-{cashback:,.2f}", delta_color="inverse")
     c5.metric("Lucro Real", f"R$ {resultado:,.2f}")
 
+    st.divider()
+
+    # --- GRÁFICO DE EVOLUÇÃO ---
+    st.subheader("📈 Evolução de Vendas por Dia")
+    if not df_v.empty:
+        # Preparação dos dados para o gráfico
+        df_v['data_dt'] = pd.to_datetime(df_v['data'], format="%d/%m/%Y %H:%M", errors='coerce')
+        df_v['apenas_data'] = df_v['data_dt'].dt.strftime('%d/%m/%Y')
+        
+        # Agrupar vendas por dia
+        vendas_por_dia = df_v.groupby('apenas_data')['valor_bruto'].sum().reset_index()
+        vendas_por_dia = vendas_por_dia.set_index('apenas_data')
+        
+        # Exibir gráfico de barras
+        st.bar_chart(vendas_por_dia, color="#7CFC00") # Usando o Verde Flash Stop
+    else:
+        st.info("Aguardando primeiras vendas para gerar gráfico de evolução.")
+
+    st.divider()
+
+    # --- ALERTAS CRÍTICOS ---
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.subheader("🚨 Alerta de Estoque Baixo")
+        estoque_critico = df_p[df_p['estoque'] <= df_p['estoque_minimo']]
+        if not estoque_critico.empty:
+            st.warning(f"Atenção: {len(estoque_critico)} itens em nível crítico.")
+            st.dataframe(estoque_critico[['nome', 'estoque', 'estoque_minimo']], use_container_width=True, hide_index=True)
+        else:
+            st.success("✅ Estoque em dia!")
+
+    with col_b:
+        st.subheader("📅 Alerta de Validade")
+        vencendo = []
+        hoje = datetime.now()
+        for _, item in df_p.iterrows():
+            try:
+                dt_val = datetime.strptime(str(item['validade']), "%d/%m/%Y")
+                if dt_val <= hoje + timedelta(days=15):
+                    vencendo.append({"Produto": item['nome'], "Vencimento": item['validade'], "Status": "VENCIDO" if dt_val < hoje else "Crítico"})
+            except: continue
+        
+        if vencendo:
+            st.error(f"Validade Crítica: {len(vencendo)} itens.")
+            st.table(vencendo)
+        else:
+            st.success("✅ Validades OK!")
 # ==================== 5. SELF-CHECKOUT ====================
 elif menu == "🛍️ Self-Checkout":
     st.markdown(f"<h2 style='text-align: center;'>🛒 Checkout - {st.session_state.pdv_atual if st.session_state.pdv_atual else 'Modo Admin'}</h2>", unsafe_allow_html=True)
