@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import time
 
 # ==================== 1. CONFIGURAÇÕES INICIAIS ====================
-st.set_page_config(page_title="Flash Stop Ultimate v6.5", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Flash Stop Ultimate v6.6", layout="wide", page_icon="⚡")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 COLS = {
@@ -55,6 +55,7 @@ with st.sidebar:
         "📈 Custos Fixos", 
         "💰 Entrada de Mercadoria", 
         "📦 Inventário Geral", 
+        "📂 Relatórios Contábeis",
         "🚚 Fornecedores", 
         "📟 Configurações"
     ])
@@ -96,7 +97,7 @@ if menu == "📊 Dashboard & Performance":
         if not baixo.empty: st.warning(f"{len(baixo)} itens críticos"); st.table(baixo[['nome', 'estoque']])
         else: st.success("Estoque OK!")
     with col_b:
-        st.subheader("📅 Validade (15 dias)")
+        st.subheader("📅 Validade (Próximos 15 dias)")
         hoje = datetime.now()
         vencendo = []
         for _, r in df_p.iterrows():
@@ -145,7 +146,7 @@ elif menu == "📈 Custos Fixos":
             nova = pd.DataFrame([{"pdv": p, "descricao": d, "valor": v, "vencimento": datetime.now().strftime("%d/%m/%Y")}])
             conn.update(worksheet="despesas", data=pd.concat([df_d, nova], ignore_index=True))
             st.success("Lançado!"); st.rerun()
-    st.dataframe(df_d, use_container_width=True)
+    st.dataframe(df_d, use_container_width=True, hide_index=True)
 
 # ==================== 7. ENTRADA DE MERCADORIA ====================
 elif menu == "💰 Entrada de Mercadoria":
@@ -163,11 +164,11 @@ elif menu == "💰 Entrada de Mercadoria":
     with st.form("ent_f"):
         nome_in = st.text_input("Nome") if sel == "NOVO" else sel
         c1, c2 = st.columns(2)
-        custo = c1.number_input("Custo Un.", min_value=0.0)
+        custo = c1.number_input("Custo Un. (Compra)", min_value=0.0)
         margem = c2.slider("Margem %", 10, 200, 50)
         qtd_in = st.number_input("Qtd Entrada", min_value=1)
-        val_in = st.date_input("Validade")
-        if st.form_submit_button("CONCLUIR"):
+        val_in = st.date_input("Nova Data de Validade")
+        if st.form_submit_button("CONCLUIR ENTRADA"):
             preco_v = custo * (1 + margem/100)
             if sel == "NOVO":
                 novo = pd.DataFrame([{"nome": nome_in, "estoque": qtd_in, "preco": preco_v, "validade": val_in.strftime("%d/%m/%Y"), "estoque_minimo": 5}])
@@ -184,12 +185,13 @@ elif menu == "📦 Inventário Geral":
     st.header("📦 Gestão de Inventário")
     df_p = carregar("produtos")
     with st.form("min_f"):
-        p_sel = st.selectbox("Produto:", df_p['nome'].tolist() if not df_p.empty else ["-"])
-        e_m = st.number_input("Novo Estoque Mínimo:", min_value=0)
-        if st.form_submit_button("Atualizar Alerta"):
-            idx = df_p[df_p['nome'] == p_sel].index[0]
-            df_p.at[idx, 'estoque_minimo'] = e_m
-            conn.update(worksheet="produtos", data=df_p); st.success("Limite alterado!"); st.rerun()
+        p_sel = st.selectbox("Selecionar Produto para Ajustar Mínimo:", df_p['nome'].tolist() if not df_p.empty else ["-"])
+        e_m = st.number_input("Novo Limite de Estoque Mínimo para Alerta:", min_value=0)
+        if st.form_submit_button("Atualizar Limite"):
+            if p_sel != "-":
+                idx = df_p[df_p['nome'] == p_sel].index[0]
+                df_p.at[idx, 'estoque_minimo'] = e_m
+                conn.update(worksheet="produtos", data=df_p); st.success(f"Alerta de {p_sel} alterado!"); st.rerun()
     st.divider()
     if not df_p.empty:
         df_p['Status'] = df_p.apply(lambda x: "🚨 REPOR" if x['estoque'] <= x['estoque_minimo'] else "✅ OK", axis=1)
@@ -197,64 +199,35 @@ elif menu == "📦 Inventário Geral":
 
 # ==================== 9. RELATÓRIOS CONTÁBEIS ====================
 elif menu == "📂 Relatórios Contábeis":
-    st.header("📂 Fechamento e Exportação Contábil")
+    st.header("📂 Relatórios para Contabilidade")
     df_v = carregar("vendas")
     df_pts = carregar("pontos")
-    
     if not df_v.empty:
-        # Filtros para o Contador
-        col1, col2 = st.columns(2)
-        pdv_filtro = col1.selectbox("Filtrar por Unidade", ["Todos"] + df_pts['nome'].tolist())
-        
-        # Filtro de Data
+        c1, c2 = st.columns(2)
+        pdv_f = c1.selectbox("Ponto de Venda", ["Todos"] + df_pts['nome'].tolist())
         df_v['data_dt'] = pd.to_datetime(df_v['data'], dayfirst=True, errors='coerce')
-        meses = df_v['data_dt'].dt.strftime('%m/%Y').unique().tolist()
-        mes_filtro = col2.selectbox("Filtrar por Mês", ["Todos"] + meses)
+        meses = ["Todos"] + df_v['data_dt'].dt.strftime('%m/%Y').unique().tolist()
+        mes_f = c2.selectbox("Mês de Referência", meses)
         
-        # Aplicação dos Filtros
-        dados_filtrados = df_v.copy()
-        if pdv_filtro != "Todos":
-            dados_filtrados = dados_filtrados[dados_filtrados['pdv'] == pdv_filtro]
-        if mes_filtro != "Todos":
-            dados_filtrados = dados_filtrados[dados_filtrados['data_dt'].dt.strftime('%m/%Y') == mes_filtro]
-            
-        # Resumo para conferência rápida
-        st.subheader(f"Resumo: {pdv_filtro} ({mes_filtro})")
-        c1, c2, c3 = st.columns(3)
-        bruto_f = dados_filtrados['valor_bruto'].sum()
-        liq_f = dados_filtrados['valor_liquido'].sum()
-        c1.metric("Faturamento Bruto", f"R$ {bruto_f:,.2f}")
-        c2.metric("Líquido (Pós-Taxas)", f"R$ {liq_f:,.2f}")
-        c3.metric("Total de Vendas", len(dados_filtrados))
+        filtrados = df_v.copy()
+        if pdv_f != "Todos": filtrados = filtrados[filtrados['pdv'] == pdv_f]
+        if mes_f != "Todos": filtrados = filtrados[filtrados['data_dt'].dt.strftime('%m/%Y') == mes_f]
         
-        st.divider()
-        
-        # Tabela de Dados e Exportação
-        st.write("Dados detalhados para o contador:")
-        # Removemos a coluna auxiliar de data antes de mostrar/baixar
-        export_df = dados_filtrados.drop(columns=['data_dt'])
-        st.dataframe(export_df, use_container_width=True, hide_index=True)
-        
-        # Botão de Download CSV
-        csv = export_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="📥 Baixar Relatório para Excel/Contabilidade",
-            data=csv,
-            file_name=f"contabilidade_flash_stop_{pdv_filtro}_{mes_filtro}.csv",
-            mime="text/csv",
-        )
-    else:
-        st.info("Ainda não existem vendas registradas para gerar relatórios.")
+        st.metric("Faturamento Bruto Filtrado", f"R$ {filtrados['valor_bruto'].sum():,.2f}")
+        st.dataframe(filtrados.drop(columns=['data_dt']), hide_index=True)
+        csv = filtrados.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("📥 Baixar Relatório (CSV para Excel)", data=csv, file_name=f"relatorio_contabil_{mes_f}.csv", mime="text/csv")
+    else: st.info("Sem vendas para gerar relatórios.")
+
 # ==================== 10. FORNECEDORES ====================
 elif menu == "🚚 Fornecedores":
     st.header("🚚 Gestão de Fornecedores")
     df_f = carregar("fornecedores")
     with st.form("f_f"):
         n = st.text_input("Nome Fantasia"); c = st.text_input("CNPJ/CPF")
-        if st.form_submit_button("Salvar"):
-            conn.update(worksheet="fornecedores", data=pd.concat([df_f, pd.DataFrame([{"nome_fantasia": n, "cnpj_cpf": c}])], ignore_index=True))
-            st.rerun()
-    st.dataframe(df_f, use_container_width=True)
+        if st.form_submit_button("Salvar Fornecedor"):
+            conn.update(worksheet="fornecedores", data=pd.concat([df_f, pd.DataFrame([{"nome_fantasia": n, "cnpj_cpf": c}])], ignore_index=True)); st.rerun()
+    st.dataframe(df_f, use_container_width=True, hide_index=True)
 
 # ==================== 11. CONFIGURAÇÕES ====================
 elif menu == "📟 Configurações":
@@ -262,14 +235,14 @@ elif menu == "📟 Configurações":
     df_pts, df_m = carregar("pontos"), carregar("maquinas")
     t1, t2 = st.tabs(["Unidades/PDV", "Máquinas de Cartão"])
     with t1:
-        n_p = st.text_input("Novo PDV")
+        n_p = st.text_input("Novo Nome do PDV")
         if st.button("Cadastrar PDV"):
             conn.update(worksheet="pontos", data=pd.concat([df_pts, pd.DataFrame([{"nome": n_p}])], ignore_index=True)); st.rerun()
-        st.dataframe(df_pts, use_container_width=True)
+        st.dataframe(df_pts, use_container_width=True, hide_index=True)
     with t2:
         with st.form("m_f"):
-            mn = st.text_input("Máquina"); mv = st.selectbox("PDV", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
-            c1, c2, c3 = st.columns(3); p_tx = c1.number_input("Pix %"); d_tx = c2.number_input("Débito %"); c_tx = c3.number_input("Crédito %")
+            mn = st.text_input("Nome da Máquina"); mv = st.selectbox("Vincular ao PDV", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
+            c1, c2, c3 = st.columns(3); p_tx = c1.number_input("Taxa Pix %"); d_tx = c2.number_input("Taxa Débito %"); c_tx = c3.number_input("Taxa Crédito %")
             if st.form_submit_button("Salvar Máquina"):
                 conn.update(worksheet="maquinas", data=pd.concat([df_m, pd.DataFrame([{"nome_maquina": mn, "pdv_vinculado": mv, "taxa_debito": d_tx, "taxa_credito": c_tx, "taxa_pix": p_tx}])], ignore_index=True)); st.rerun()
-        st.dataframe(df_m, use_container_width=True)
+        st.dataframe(df_m, use_container_width=True, hide_index=True)
