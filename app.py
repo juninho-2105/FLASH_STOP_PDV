@@ -65,31 +65,78 @@ if st.sidebar.button("Sair"):
     st.session_state.autenticado = False
     st.rerun()
 
-# ==================== 4. DASHBOARD ====================
+# ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Performance Financeira")
+    
+    # Carregamento de dados
     df_v = carregar_dinamico("vendas")
     df_d = carregar_dinamico("despesas")
     df_p = carregar_dinamico("produtos")
     
-    # Cálculos
+    # --- BLOCO DE KPIs ---
     bruto = pd.to_numeric(df_v['valor_bruto'], errors='coerce').sum()
     liq = pd.to_numeric(df_v['valor_liquido'], errors='coerce').sum()
     gastos = pd.to_numeric(df_d['valor'], errors='coerce').sum()
     lucro = liq - gastos
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Bruto Total", f"R$ {bruto:,.2f}")
-    c2.metric("Líquido", f"R$ {liq:,.2f}")
-    c3.metric("Despesas", f"R$ {gastos:,.2f}")
-    c4.metric("Lucro Real", f"R$ {lucro:,.2f}")
+    c1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
+    c2.metric("Líquido (Pós Taxas)", f"R$ {liq:,.2f}")
+    c3.metric("Despesas Totais", f"R$ {gastos:,.2f}")
+    c4.metric("Lucro Real", f"R$ {lucro:,.2f}", delta=f"{lucro/bruto*100:.1f}%" if bruto > 0 else None)
 
-    # Gráfico de Vendas por Data
+    st.divider()
+
+    # --- GRÁFICO DE VENDAS ---
     st.subheader("📈 Evolução de Vendas")
     if not df_v.empty:
-        df_v['data_dt'] = pd.to_datetime(df_v['data'], format="%d/%m/%Y %H:%M", errors='coerce')
-        vendas_dia = df_v.groupby(df_v['data_dt'].dt.date)['valor_bruto'].sum()
-        st.line_chart(vendas_dia)
+        try:
+            # Converte a data para gráfico
+            df_v['data_dt'] = pd.to_datetime(df_v['data'], format="%d/%m/%Y %H:%M", errors='coerce')
+            vendas_dia = df_v.groupby(df_v['data_dt'].dt.date)['valor_bruto'].sum()
+            st.area_chart(vendas_dia)
+        except:
+            st.info("Aguardando mais dados para gerar o gráfico.")
+
+    st.divider()
+
+    # --- BLOCO DE ALERTAS ---
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.subheader("🚨 Reposição (Estoque Crítico)")
+        # Filtra produtos onde estoque atual é menor ou igual ao mínimo
+        critico = df_p[df_p['estoque'].astype(int) <= df_p['estoque_minimo'].astype(int)]
+        if not critico.empty:
+            st.dataframe(critico[['nome', 'estoque', 'estoque_minimo']], 
+                         hide_index=True, use_container_width=True)
+        else:
+            st.success("Estoque abastecido em todas as unidades!")
+
+    with col_b:
+        st.subheader("📅 Alertas de Validade (15 dias)")
+        vencendo = []
+        hoje = datetime.now()
+        for _, r in df_p.iterrows():
+            try:
+                # Converte a data da planilha para comparar
+                dt_val = datetime.strptime(str(r['validade']), "%d/%m/%Y")
+                if dt_val <= hoje + timedelta(days=15):
+                    status = "VENCIDO" if dt_val < hoje else "Vence em breve"
+                    vencendo.append({
+                        "Produto": r['nome'], 
+                        "Qtd": r['estoque'], 
+                        "Data": r['validade'],
+                        "Status": status
+                    })
+            except:
+                continue
+        
+        if vencendo:
+            st.dataframe(pd.DataFrame(vencendo), hide_index=True, use_container_width=True)
+        else:
+            st.success("Nenhum produto próximo ao vencimento!")
 
 # ==================== 5. SELF-CHECKOUT ====================
 elif menu == "🛒 Self-Checkout":
