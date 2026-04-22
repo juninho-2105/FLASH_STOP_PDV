@@ -260,18 +260,60 @@ elif menu == "💰 Entrada Mercadoria":
                     st.success("Dados atualizados!")
                     time.sleep(1); st.rerun()
 
-# ==================== 8. INVENTÁRIO ====================
+# ==================== 8. INVENTÁRIO (COM BAIXA DE VENCIDOS) ====================
 elif menu == "📦 Inventário":
-    st.header("📦 Controle de Estoque")
+    st.header("📦 Controle de Estoque e Perdas")
     df_p = carregar_dinamico("produtos")
-    st.dataframe(df_p, use_container_width=True)
-    with st.form("f_inv"):
-        p_sel = st.selectbox("Ajustar Mínimo de:", df_p['nome'].tolist())
-        min_n = st.number_input("Novo Alerta Mínimo", min_value=0)
-        if st.form_submit_button("Salvar Alerta"):
-            idx = df_p[df_p['nome'] == p_sel].index[0]
-            df_p.at[idx, 'estoque_minimo'] = min_n
-            conn.update(worksheet="produtos", data=df_p); st.rerun()
+    
+    # --- VISUALIZAÇÃO GERAL ---
+    st.subheader("Situação Atual do Estoque")
+    st.dataframe(df_p, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    col_inv1, col_inv2 = st.columns(2)
+
+    # --- AJUSTE DE ALERTA MÍNIMO ---
+    with col_inv1:
+        with st.container(border=True):
+            st.markdown("#### ⚙️ Ajustar Alerta Mínimo")
+            p_sel_min = st.selectbox("Produto para configurar alerta:", df_p['nome'].tolist(), key="sel_min")
+            min_n = st.number_input("Nova quantidade mínima para alerta:", min_value=0, step=1)
+            
+            if st.button("Salvar Novo Limite", use_container_width=True):
+                idx = df_p[df_p['nome'] == p_sel_min].index[0]
+                df_p.at[idx, 'estoque_minimo'] = min_n
+                conn.update(worksheet="produtos", data=df_p)
+                st.success(f"Alerta de '{p_sel_min}' atualizado!")
+                time.sleep(1); st.rerun()
+
+    # --- RETIRADA DE VENCIDOS (NOVA FUNÇÃO) ---
+    with col_inv2:
+        with st.container(border=True):
+            st.markdown("#### 🗑️ Baixa de Produtos Vencidos")
+            # Filtra apenas produtos que têm estoque para retirar
+            produtos_com_estoque = df_p[df_p['estoque'] > 0]['nome'].tolist()
+            
+            p_vencido = st.selectbox("Produto a ser descartado:", [""] + produtos_com_estoque, key="sel_venc")
+            qtd_vencida = st.number_input("Quantidade vencida/danificada:", min_value=0, step=1)
+            
+            if st.button("Confirmar Retirada", use_container_width=True, type="secondary"):
+                if p_vencido != "" and qtd_vencida > 0:
+                    idx = df_p[df_p['nome'] == p_vencido].index[0]
+                    estoque_atual = int(df_p.at[idx, 'estoque'])
+                    
+                    if qtd_vencida > estoque_atual:
+                        st.error(f"Erro: Você está tentando retirar {qtd_vencida}, mas o estoque atual é de apenas {estoque_atual}.")
+                    else:
+                        with st.spinner("Processando baixa..."):
+                            df_p.at[idx, 'estoque'] = estoque_atual - qtd_vencida
+                            conn.update(worksheet="produtos", data=df_p)
+                            st.warning(f"Baixa realizada: {qtd_vencida} unidade(s) de '{p_vencido}' removidas do estoque.")
+                            time.sleep(1.5); st.rerun()
+                else:
+                    st.info("Selecione um produto e a quantidade para dar baixa.")
+
+    st.markdown("<p style='font-size: 12px; color: gray;'>Dica: Use esta função para registrar perdas, quebras ou produtos que passaram da validade e precisam sair do inventário físico.</p>", unsafe_allow_html=True)
 
 # ==================== 9. CONTABILIDADE ====================
 elif menu == "📂 Contabilidade":
