@@ -162,11 +162,16 @@ elif menu == "💰 Entrada Mercadoria":
                 df_p.at[idx_p, 'validade'] = validade_p.strftime("%d/%m/%Y")
             conn.update(worksheet="produtos", data=df_p); st.success("Estoque atualizado!"); st.rerun()
 
-# ==================== 8. INVENTÁRIO ====================
+# ==================== 8. INVENTÁRIO (CORRIGIDO) ====================
 elif menu == "📦 Inventário":
     st.header("📦 Gestão de Estoque")
     df_prod = carregar("produtos")
     st.dataframe(df_prod, use_container_width=True)
     with st.form("form_limite"):
         p_ajuste = st.selectbox("Produto para ajustar alerta:", df_prod['nome'].tolist())
-        limite_n = st.number_input("Mínimo para Alerta:", min_value
+        limite_n = st.number_input("Mínimo para Alerta:", min_value=0) # Linha que estava cortada
+        if st.form_submit_button("Atualizar Alerta"):
+            idx_a = df_prod[df_prod['nome'] == p_ajuste].index[0]
+            df_prod.at[idx_a, 'estoque_minimo'] = limite_n
+            conn.update(worksheet="produtos", data=df_prod)
+            st.success("Limite salvo!"); st.rerun()
