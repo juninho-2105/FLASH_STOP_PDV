@@ -173,24 +173,54 @@ elif menu == "📈 Custos Fixos":
 elif menu == "💰 Entrada de Mercadoria":
     st.header("💰 Entrada e Precificação")
     df_p = carregar("produtos")
+    
     with st.form("entrada_form"):
-        sel = st.selectbox("Produto", ["NOVO"] + df_p['nome'].tolist())
-        nome = st.text_input("Nome") if sel == "NOVO" else sel
-        c1, c2 = st.columns(2)
-        custo = c1.number_input("Custo de Compra (Un)")
-        margem = c2.slider("Margem Desejada (%)", 10, 200, 50)
-        qtd = st.number_input("Qtd Entrada", min_value=1)
-        val = st.date_input("Data de Validade")
+        # Permite escolher um produto existente ou cadastrar um novo
+        opcoes_produtos = ["NOVO"] + df_p['nome'].tolist()
+        sel = st.selectbox("Produto", opcoes_produtos)
         
-        if st.form_submit_button("Confirmar Entrada"):
+        # Se for novo, pede o nome. Se for existente, usa o nome selecionado.
+        nome = st.text_input("Nome do Produto") if sel == "NOVO" else sel
+        
+        c1, c2 = st.columns(2)
+        custo = c1.number_input("Novo Custo de Compra (Un)", min_value=0.0, step=0.01)
+        margem = c2.slider("Margem de Lucro Desejada (%)", 10, 200, 50)
+        
+        c3, c4 = st.columns(2)
+        qtd = c3.number_input("Quantidade de Entrada", min_value=1, step=1)
+        val = st.date_input("Nova Data de Validade")
+        
+        if st.form_submit_button("Confirmar Entrada e Atualizar Preço"):
+            # Cálculo automático do preço de venda baseado na margem
             preco_final = custo * (1 + margem/100)
+            
             if sel == "NOVO":
-                novo = pd.DataFrame([{"nome": nome, "estoque": qtd, "preco": preco_final, "validade": val.strftime("%d/%m/%Y"), "estoque_minimo": 5}])
-                df_p = pd.concat([df_p, novo], ignore_index=True)
+                # Cria uma nova linha no DataFrame
+                novo_prod = pd.DataFrame([{
+                    "nome": nome, 
+                    "estoque": qtd, 
+                    "preco": preco_final, 
+                    "validade": val.strftime("%d/%m/%Y"), 
+                    "estoque_minimo": 5
+                }])
+                df_p = pd.concat([df_p, novo_prod], ignore_index=True)
+                st.success(f"Produto {nome} cadastrado com sucesso!")
             else:
+                # Localiza o índice do produto existente e atualiza os campos
                 idx = df_p[df_p['nome'] == sel].index[0]
-                df_p.at[idx, 'estoque'] += qtd; df_p.at[idx, 'preco'] = preco_final; df_p.at[idx, 'validade'] = val.strftime("%d/%m/%Y")
-            conn.update(worksheet="produtos", data=df_p); st.success("Estoque atualizado!"); st.rerun()
+                df_p.at[idx, 'estoque'] += qtd  # Soma ao estoque atual
+                df_p.at[idx, 'preco'] = preco_final # Atualiza para o novo preço calculado
+                df_p.at[idx, 'validade'] = val.strftime("%d/%m/%Y") # Atualiza validade
+                st.success(f"Estoque e Preço de {sel} atualizados!")
+            
+            # Salva de volta no Google Sheets
+            conn.update(worksheet="produtos", data=df_p)
+            time.sleep(1)
+            st.rerun()
+
+    st.divider()
+    st.subheader("📋 Tabela de Preços e Validades Atual")
+    st.dataframe(df_p[['nome', 'estoque', 'preco', 'validade']], use_container_width=True, hide_index=True)
 
 # ==================== 8. OUTROS MÓDULOS ====================
 elif menu == "📦 Inventário Geral":
