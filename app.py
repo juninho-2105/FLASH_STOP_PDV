@@ -276,19 +276,60 @@ elif menu == "🛒 Self-Checkout":
         else:
             st.error(f"Erro: {e}")
 
-# ==================== 6. CUSTOS FIXOS ====================
-elif menu == "📈 Custos Fixos":
-    st.header("📈 Despesas Operacionais")
-    df_d, df_pts = carregar("despesas"), carregar("pontos")
-    with st.form("f_d"):
-        p = st.selectbox("PDV", df_pts['nome'].tolist())
-        d = st.text_input("Descrição")
-        v = st.number_input("Valor", min_value=0.0)
-        if st.form_submit_button("Salvar"):
-            nova = pd.DataFrame([{"pdv": p, "descricao": d, "valor": v, "vencimento": datetime.now().strftime("%d/%m/%Y")}])
-            conn.update(worksheet="despesas", data=pd.concat([df_d, nova], ignore_index=True))
-            st.success("Salvo com sucesso!"); st.rerun()
-    st.dataframe(df_d, use_container_width=True)
+# ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS) ====================
+elif menu == "💸 Despesas":
+    st.header("💸 Registro de Custos e Despesas")
+    
+    try:
+        # Carrega a aba de despesas do Sheets
+        df_d = carregar_dinamico("despesas")
+        
+        col1, col2 = st.columns([1, 1.5])
+        
+        with col1:
+            st.subheader("Registrar Nova")
+            with st.form("form_despesa", clear_on_submit=True):
+                descricao = st.text_input("Descrição (ex: Aluguel, Internet, Luz):")
+                valor_d = st.number_input("Valor (R$):", min_value=0.0, format="%.2f")
+                categoria = st.selectbox("Categoria:", ["Fixo", "Variável", "Manutenção", "Impostos", "Outros"])
+                data_venc = st.date_input("Data do Gasto:")
+                
+                if st.form_submit_button("SALVAR DESPESA"):
+                    if descricao and valor_d > 0:
+                        nova_linha = {
+                            "data": data_venc.strftime("%d/%m/%Y"),
+                            "descricao": descricao,
+                            "categoria": categoria,
+                            "valor": valor_d
+                        }
+                        # Adiciona ao DataFrame existente
+                        df_d = pd.concat([df_d, pd.DataFrame([nova_linha])], ignore_index=True)
+                        
+                        with st.spinner("Salvando..."):
+                            conn.update(worksheet="despesas", data=df_d)
+                            st.cache_data.clear() # Limpa cache para atualizar o Dashboard
+                            st.success("Despesa registrada com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+                    else:
+                        st.warning("Preencha a descrição e o valor.")
+
+        with col2:
+            st.subheader("Histórico de Gastos")
+            if not df_d.empty:
+                # Converte para número para garantir a soma correta
+                df_d['valor'] = pd.to_numeric(df_d['valor'], errors='coerce')
+                
+                # Exibe a tabela
+                st.dataframe(df_d.sort_index(ascending=False), use_container_width=True, hide_index=True)
+                
+                total_gastos = df_d['valor'].sum()
+                st.metric("Total Acumulado em Despesas", f"R$ {total_gastos:,.2f}")
+            else:
+                st.info("Nenhuma despesa registrada ainda.")
+
+    except Exception as e:
+        st.error(f"Erro ao acessar despesas: {e}")
 
 # ==================== 7. ENTRADA E CADASTRO (COM CÁLCULO DINÂMICO) ====================
 elif menu == "💰 Entrada Mercadoria":
