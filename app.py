@@ -134,103 +134,93 @@ if menu == "📊 Dashboard":
             st.dataframe(pd.DataFrame(vencendo), use_container_width=True, hide_index=True)
         else:
             st.success("✅ Nenhuma validade próxima!")
-# ==================== 5. SELF-CHECKOUT (COM CARRINHO DE COMPRAS) ====================
 elif menu == "🛒 Self-Checkout":
-    st.header(f"🛒 Totem de Vendas - {st.session_state.unidade}")
+    st.header(f"🛒 Totem de Vendas - {st.session_state.get('unidade', 'PDV Central')}")
     
-    # Inicializa o carrinho na sessão se não existir
+    # GARANTIA DE CARRINHO VIVO
     if 'carrinho' not in st.session_state:
         st.session_state.carrinho = []
 
-    df_p = carregar_dinamico("produtos")
-    df_m = carregar_dinamico("maquinas")
-    
-    # Filtra maquinas vinculadas a este PDV
-    maquina_pdv = df_m[df_m['pdv_vinculado'] == st.session_state.unidade]
-
-    col_sel, col_car = st.columns([1.5, 1])
-
-    with col_sel:
-        st.subheader("Escolha os Produtos")
-        # Campo de busca (funciona com leitor de código de barras)
-        opcoes_p = [""] + df_p[df_p['estoque'] > 0]['nome'].tolist()
-        produto_sel = st.selectbox("Bipe o código ou selecione o produto:", opcoes_p, key="busca_prod")
+    try:
+        df_p = carregar_dinamico("produtos")
+        df_m = carregar_dinamico("maquinas")
         
-        if produto_sel:
-            dados_p = df_p[df_p['nome'] == produto_sel].iloc[0]
-            st.image("https://cdn-icons-png.flaticon.com/512/1170/1170678.png", width=50) # Ícone ilustrativo
-            st.write(f"**Preço Un:** R$ {float(dados_p['preco']):.2f}")
-            qtd = st.number_input("Quantidade:", min_value=1, max_value=int(dados_p['estoque']), value=1)
-            
-            if st.button("➕ ADICIONAR AO CARRINHO", use_container_width=True):
-                item_carrinho = {
-                    "produto": produto_sel,
-                    "qtd": qtd,
-                    "preco_un": float(dados_p['preco']),
-                    "subtotal": qtd * float(dados_p['preco'])
-                }
-                st.session_state.carrinho.append(item_carrinho)
-                st.toast(f"{produto_sel} adicionado!", icon="✅")
-                time.sleep(0.5)
-                st.rerun()
+        col_sel, col_car = st.columns([1.2, 1])
 
-    with col_car:
-        st.subheader("🛒 Seu Carrinho")
-        if st.session_state.carrinho:
-            total_venda = 0
-            for i, item in enumerate(st.session_state.carrinho):
-                total_venda += item['subtotal']
-                st.write(f"{item['qtd']}x {item['produto']} - R$ {item['subtotal']:.2f}")
+        with col_sel:
+            st.subheader("Produtos")
+            # Filtra apenas quem tem estoque
+            prods_estoque = df_p[df_p['estoque'].astype(int) > 0]
+            opcoes_p = [""] + prods_estoque['nome'].tolist()
             
-            st.divider()
-            st.markdown(f"### TOTAL: R$ {total_venda:.2f}")
+            produto_sel = st.selectbox("Selecione ou Bipe o item:", opcoes_p, key="input_checkout")
             
-            if st.button("🗑️ Limpar Carrinho"):
-                st.session_state.carrinho = []
-                st.rerun()
-
-            st.divider()
-            
-            # --- FINALIZAÇÃO ---
-            metodo = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
-            
-            if st.button("✅ FINALIZAR E PAGAR", type="primary", use_container_width=True):
-                with st.spinner("Registrando venda..."):
-                    # Aqui entra a lógica de salvar cada item do carrinho na aba 'vendas'
-                    novas_vendas = []
-                    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-                    
-                    for item in st.session_state.carrinho:
-                        # Cálculo de taxas baseado na máquina cadastrada
-                        taxa = 0
-                        if not maquina_pdv.empty:
-                            if metodo == "Pix": taxa = float(maquina_pdv.iloc[0]['taxa_pix'])
-                            elif metodo == "Débito": taxa = float(maquina_pdv.iloc[0]['taxa_debito'])
-                            else: taxa = float(maquina_pdv.iloc[0]['taxa_credito'])
-                        
-                        v_liq = item['subtotal'] * (1 - (taxa/100))
-                        
-                        novas_vendas.append({
-                            "data": agora, "pdv": st.session_state.unidade, "produto": item['produto'],
-                            "valor_bruto": item['subtotal'], "valor_liquido": v_liq, "forma": metodo
-                        })
-                        
-                        # Baixa no estoque
-                        idx = df_p[df_p['nome'] == item['produto']].index[0]
-                        df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) - item['qtd']
-
-                    # Atualiza planilhas
-                    df_v_atual = carregar_dinamico("vendas")
-                    conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(novas_vendas)], ignore_index=True))
-                    conn.update(worksheet="produtos", data=df_p)
-                    
-                    st.session_state.carrinho = [] # Limpa carrinho
-                    st.success("Venda realizada com sucesso!")
-                    st.balloons()
-                    time.sleep(2)
+            if produto_sel:
+                dados_p = df_p[df_p['nome'] == produto_sel].iloc[0]
+                preco_item = float(dados_p['preco'])
+                
+                st.info(f"💰 Preço: R$ {preco_item:.2f} | Disponível: {dados_p['estoque']}")
+                qtd = st.number_input("Qtd:", min_value=1, max_value=int(dados_p['estoque']), value=1)
+                
+                if st.button("➕ Adicionar", use_container_width=True):
+                    st.session_state.carrinho.append({
+                        "produto": produto_sel,
+                        "qtd": qtd,
+                        "preco_un": preco_item,
+                        "subtotal": qtd * preco_item
+                    })
                     st.rerun()
-        else:
-            st.info("Carrinho vazio")
+
+        with col_car:
+            st.subheader("🛒 Itens")
+            if st.session_state.carrinho:
+                total_venda = 0
+                for i, item in enumerate(st.session_state.carrinho):
+                    total_venda += item['subtotal']
+                    st.text(f"{item['qtd']}x {item['produto']} - R$ {item['subtotal']:.2f}")
+                
+                st.markdown(f"### TOTAL: R$ {total_venda:.2f}")
+                
+                if st.button("🗑️ Esvaziar"):
+                    st.session_state.carrinho = []
+                    st.rerun()
+
+                metodo = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+                
+                if st.button("🏁 FINALIZAR COMPRA", type="primary", use_container_width=True):
+                    with st.spinner("Salvando..."):
+                        agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        novas_linhas = []
+                        
+                        for item in st.session_state.carrinho:
+                            # Cálculo de taxas
+                            v_liq = item['subtotal'] * 0.97 # Taxa padrão 3% caso não ache máquina
+                            
+                            novas_linhas.append({
+                                "data": agora, "pdv": st.session_state.get('unidade', 'Totem'),
+                                "produto": item['produto'], "valor_bruto": item['subtotal'],
+                                "valor_liquido": v_liq, "forma": metodo
+                            })
+                            
+                            # Baixa estoque
+                            idx = df_p[df_p['nome'] == item['produto']].index[0]
+                            df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) - item['qtd']
+
+                        # Envia para o Google
+                        df_v_atual = carregar_dinamico("vendas")
+                        conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(novas_linhas)], ignore_index=True))
+                        conn.update(worksheet="produtos", data=df_p)
+                        
+                        st.session_state.carrinho = []
+                        st.success("Venda Concluída!")
+                        time.sleep(2)
+                        st.rerun()
+            else:
+                st.caption("Carrinho vazio. Selecione um produto ao lado.")
+
+    except Exception as e:
+        st.error(f"Ocorreu um erro técnico: {e}")
+        st.info("Verifique se as abas 'vendas' e 'produtos' existem na planilha.")
 
 # ==================== 6. CUSTOS FIXOS ====================
 elif menu == "📈 Custos Fixos":
