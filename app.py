@@ -59,7 +59,7 @@ if not st.session_state.auth:
                         st.session_state.perfil = "cliente"
                         st.session_state.pdv_atual = u
                         st.rerun()
-                st.error("Credenciais inválidas.")
+                st.error("Credenciais inválidas ou PDV não cadastrado.")
     st.stop()
 
 # ==================== 3. NAVEGAÇÃO ====================
@@ -72,15 +72,14 @@ with st.sidebar:
         menu = st.radio("Menu", ["📊 Dashboard", "🛍️ Self-Checkout", "📈 Custos Fixos", "💰 Entrada Mercadoria", "📦 Inventário", "📂 Contabilidade", "📟 Configurações"])
     
     st.divider()
-    if st.button("🚪 Sair"):
+    if st.button("🚪 Sair do Sistema"):
         st.session_state.auth = False
         st.rerun()
 
 # ==================== 4. DASHBOARD ====================
 if menu == "📊 Dashboard":
     st.header("📊 Performance Flash Stop")
-    df_v, df_d, df_p = carregar("vendas"), carregar("despesas"), carregar("produtos")
-    
+    df_v, df_d = carregar("vendas"), carregar("despesas")
     bruto = df_v['valor_bruto'].sum()
     liq = df_v['valor_liquido'].sum()
     gastos = df_d['valor'].sum()
@@ -96,21 +95,21 @@ if menu == "📊 Dashboard":
 
 # ==================== 5. SELF-CHECKOUT ====================
 elif menu == "🛍️ Self-Checkout":
-    st.markdown(f"<h2 style='text-align: center;'>🛒 Checkout - {st.session_state.pdv_atual if st.session_state.pdv_atual else 'Admin'}</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align: center;'>🛒 Checkout - {st.session_state.pdv_atual if st.session_state.pdv_atual else 'Modo Admin'}</h2>", unsafe_allow_html=True)
     df_p, df_m, df_pts = carregar("produtos"), carregar("maquinas"), carregar("pontos")
-    v_pdv = st.session_state.pdv_atual if st.session_state.perfil == "cliente" else st.selectbox("PDV:", df_pts['nome'].tolist())
+    v_pdv = st.session_state.pdv_atual if st.session_state.perfil == "cliente" else st.selectbox("Selecione PDV para teste:", df_pts['nome'].tolist())
 
     col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
     with col_c2:
         with st.container(border=True):
-            v_prod = st.selectbox("Produto:", [""] + df_p['nome'].tolist())
-            v_qtd = st.number_input("Quantidade:", min_value=1, step=1)
+            v_prod = st.selectbox("Escolha o Produto:", [""] + df_p['nome'].tolist())
+            v_qtd = st.number_input("Qtd:", min_value=1, step=1)
             if v_prod != "":
                 p_u = float(df_p[df_p['nome'] == v_prod].iloc[0]['preco'])
                 total = p_u * v_qtd
                 st.markdown(f"<h1 style='text-align:center; color:#7CFC00;'>R$ {total:,.2f}</h1>", unsafe_allow_html=True)
                 v_forma = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
-                if st.button("✅ FINALIZAR", use_container_width=True, type="primary"):
+                if st.button("✅ FINALIZAR VENDA", use_container_width=True, type="primary"):
                     maqs = df_m[df_m['pdv_vinculado'] == v_pdv]['nome_maquina'].tolist()
                     m_n = maqs[0] if maqs else "Dinheiro"
                     idx = df_p[df_p['nome'] == v_prod].index[0]
@@ -123,17 +122,51 @@ elif menu == "🛍️ Self-Checkout":
                     venda = pd.DataFrame([{"data": datetime.now().strftime("%d/%m/%Y %H:%M"), "pdv": v_pdv, "maquina": m_n, "produto": v_prod, "valor_bruto": total, "valor_liquido": v_liq, "forma": v_forma}])
                     conn.update(worksheet="vendas", data=pd.concat([carregar("vendas"), venda], ignore_index=True))
                     conn.update(worksheet="produtos", data=df_p)
-                    st.balloons(); st.success("Sucesso!"); time.sleep(1); st.rerun()
+                    st.balloons(); st.success("Compra finalizada com sucesso!"); time.sleep(1); st.rerun()
 
 # ==================== 6. CUSTOS FIXOS ====================
 elif menu == "📈 Custos Fixos":
-    st.header("📈 Despesas")
+    st.header("📈 Registro de Despesas")
     df_d, df_pts = carregar("despesas"), carregar("pontos")
-    with st.form("f_d"):
-        p = st.selectbox("PDV", df_pts['nome'].tolist())
-        d = st.text_input("Descrição")
-        v = st.number_input("Valor", min_value=0.0)
-        if st.form_submit_button("Salvar"):
-            nova = pd.DataFrame([{"pdv": p, "descricao": d, "valor": v, "vencimento": datetime.now().strftime("%d/%m/%Y")}])
-            conn.update(worksheet="despesas", data=pd.concat([df_d, nova], ignore_index=True))
-            st.success("Sal
+    with st.form("form_despesa"):
+        p_escolhido = st.selectbox("Unidade:", df_pts['nome'].tolist())
+        desc_d = st.text_input("Descrição do Gasto:")
+        val_d = st.number_input("Valor R$:", min_value=0.0)
+        if st.form_submit_button("Lançar Despesa"):
+            nova_d = pd.DataFrame([{"pdv": p_escolhido, "descricao": desc_d, "valor": val_d, "vencimento": datetime.now().strftime("%d/%m/%Y")}])
+            conn.update(worksheet="despesas", data=pd.concat([df_d, nova_d], ignore_index=True))
+            st.success("Despesa salva com sucesso!"); st.rerun()
+    st.dataframe(df_d, use_container_width=True)
+
+# ==================== 7. ENTRADA MERCADORIA ====================
+elif menu == "💰 Entrada Mercadoria":
+    st.header("💰 Entrada de Estoque e Preços")
+    df_p = carregar("produtos")
+    sel_item = st.selectbox("Item:", ["NOVO"] + df_p['nome'].tolist())
+    with st.form("form_entrada"):
+        nome_p = st.text_input("Nome do Produto:") if sel_item == "NOVO" else sel_item
+        c_ent, m_ent = st.columns(2)
+        custo_p = c_ent.number_input("Custo Unitário:", min_value=0.0)
+        margem_p = m_ent.slider("Margem de Lucro %:", 10, 200, 50)
+        qtd_p = st.number_input("Quantidade:", min_value=1)
+        validade_p = st.date_input("Validade:", format="DD/MM/YYYY")
+        if st.form_submit_button("Confirmar Entrada"):
+            preco_final = custo_p * (1 + margem_p/100)
+            if sel_item == "NOVO":
+                novo_p = pd.DataFrame([{"nome": nome_p, "estoque": qtd_p, "preco": preco_final, "validade": validade_p.strftime("%d/%m/%Y"), "estoque_minimo": 5}])
+                df_p = pd.concat([df_p, novo_p], ignore_index=True)
+            else:
+                idx_p = df_p[df_p['nome'] == sel_item].index[0]
+                df_p.at[idx_p, 'estoque'] += qtd_p
+                df_p.at[idx_p, 'preco'] = preco_final
+                df_p.at[idx_p, 'validade'] = validade_p.strftime("%d/%m/%Y")
+            conn.update(worksheet="produtos", data=df_p); st.success("Estoque atualizado!"); st.rerun()
+
+# ==================== 8. INVENTÁRIO ====================
+elif menu == "📦 Inventário":
+    st.header("📦 Gestão de Estoque")
+    df_prod = carregar("produtos")
+    st.dataframe(df_prod, use_container_width=True)
+    with st.form("form_limite"):
+        p_ajuste = st.selectbox("Produto para ajustar alerta:", df_prod['nome'].tolist())
+        limite_n = st.number_input("Mínimo para Alerta:", min_value
