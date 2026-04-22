@@ -23,6 +23,29 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def carregar_dinamico(aba):
     return conn.read(worksheet=aba, ttl=0)
 
+# ==================== CSS PARA OCULTAR ÍCONES DO STREAMLIT ====================
+st.markdown("""
+    <style>
+        /* Oculta o menu de opções (três linhas) no topo direito */
+        #MainMenu {visibility: hidden;}
+        
+        /* Oculta o rodapé "Made with Streamlit" */
+        footer {visibility: hidden;}
+        
+        /* Oculta o cabeçalho padrão do Streamlit */
+        header {visibility: hidden;}
+        
+        /* Oculta o ícone de "deploy" (caso esteja usando Streamlit Cloud) */
+        .stDeployButton {display:none;}
+        
+        /* Ajusta o espaçamento do topo para o logo não ficar colado */
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # ==================== 2. SISTEMA DE LOGIN ====================
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
