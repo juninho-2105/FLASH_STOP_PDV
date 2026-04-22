@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import time
 
 # ==================== CONFIGURAÇÃO DA PÁGINA ====================
-st.set_page_config(page_title="Flash Stop Pro v5.5", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Flash Stop Pro v5.8", layout="wide", page_icon="⚡")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -15,7 +15,6 @@ COLUNAS_VENDAS = ["data", "pdv", "maquina", "produto", "valor_bruto", "valor_liq
 COLUNAS_DESPESAS = ["pdv", "descricao", "valor", "vencimento"]
 COLUNAS_MAQUINAS = ["nome_maquina", "pdv_vinculado", "taxa_debito", "taxa_credito", "taxa_pix"]
 COLUNAS_PONTOS = ["nome"]
-COLUNAS_FORNECEDORES = ["nome_fantasia", "cnpj_cpf"]
 
 # ==================== FUNÇÕES MOTORAS ====================
 @st.cache_data(ttl=60)
@@ -24,7 +23,8 @@ def carregar_dados(nome_aba, colunas):
         df = conn.read(worksheet=nome_aba, ttl=0)
         df = df.dropna(how='all')
         if df.empty: return pd.DataFrame(columns=colunas)
-        # Tratamento numérico para evitar erros de cálculo
+        for col in colunas:
+            if col not in df.columns: df[col] = 0
         num_cols = ["estoque", "preco", "valor", "valor_bruto", "valor_liquido", "taxa_debito", "taxa_credito", "taxa_pix", "estoque_minimo"]
         for col in num_cols:
             if col in df.columns:
@@ -37,9 +37,7 @@ def render_logo(font_size="42px"):
     st.markdown(f'<div style="text-align:center;"><h1 style="font-family:Arial Black; font-size:{font_size}; color:#000;">FLASH <span style="color:#7CFC00; font-style:italic;">STOP</span></h1></div>', unsafe_allow_html=True)
 
 # ==================== CONTROLE DE ACESSO ====================
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
-
+if "autenticado" not in st.session_state: st.session_state.autenticado = False
 if not st.session_state.autenticado:
     render_logo("55px")
     with st.form("login"):
@@ -53,174 +51,96 @@ if not st.session_state.autenticado:
 # ==================== MENU LATERAL ====================
 with st.sidebar:
     render_logo("30px")
-    st.divider()
     menu = st.radio("Navegação Principal", [
         "📊 Dashboard & Alertas",
-        "💰 Entrada de Mercadoria (Custos)",
-        "📈 Financeiro (Despesas Fixas)",
+        "📂 Relatórios Contábeis",
+        "💰 Entrada de Mercadoria",
+        "📈 Despesas Fixas",
         "🛍️ Frente de Caixa (PDV)",
-        "📦 Inventário (Estoque)",
-        "🚚 Fornecedores",
-        "📟 Configurações (Taxas/PDVs)"
+        "📦 Inventário de Estoque",
+        "📟 Configurações"
     ])
     if st.button("🔄 Sincronizar Agora"):
         st.cache_data.clear()
         st.rerun()
 
-# ==================== 1. DASHBOARD & ALERTAS ====================
+# ==================== 1. DASHBOARD & ALERTAS (REVISADO) ====================
 if menu == "📊 Dashboard & Alertas":
-    st.header("📊 Resultado Operacional")
-    vendas = carregar_dados("vendas", COLUNAS_VENDAS)
-    despesas = carregar_dados("despesas", COLUNAS_DESPESAS)
+    st.header("📊 Painel de Controle e Alertas Críticos")
     prods = carregar_dados("produtos", COLUNAS_PRODUTOS)
-
-    # Cards de Métricas
-    bruto = vendas['valor_bruto'].sum()
-    liq_vendas = vendas['valor_liquido'].sum()
-    fixo = despesas['valor'].sum()
-    cashback = bruto * 0.02
-    lucro_real = liq_vendas - fixo
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Bruto Total", f"R$ {bruto:,.2f}")
-    m2.metric("Cashback (2%)", f"R$ {cashback:,.2f}")
-    m3.metric("Despesas Fixas", f"R$ {fixo:,.2f}", delta_color="inverse")
-    m4.metric("Lucro Real", f"R$ {lucro_real:,.2f}")
-
-    # Alertas
-    st.divider()
-    c_alt1, c_alt2 = st.columns(2)
-    with c_alt1:
-        baixo = prods[prods['estoque'] <= prods['estoque_minimo']]
-        if not baixo.empty:
-            st.error(f"🚨 Estoque Baixo ({len(baixo)} itens)")
-            st.dataframe(baixo[['nome', 'estoque']], use_container_width=True, hide_index=True)
-    with c_alt2:
-        st.success("✅ Sistema Operacional")
-
-# ==================== 2. ENTRADA DE MERCADORIA (CUSTOS + ESTOQUE) ====================
-elif menu == "💰 Entrada de Mercadoria (Custos)":
-    st.header("💰 Entrada e Precificação Automática")
-    df_p = carregar_dados("produtos", COLUNAS_PRODUTOS)
-    df_f = carregar_dados("fornecedores", COLUNAS_FORNECEDORES)
-
-    with st.form("entrada_unificada"):
-        col1, col2 = st.columns(2)
-        with col1:
-            selecao = st.selectbox("Produto", ["+ NOVO PRODUTO"] + df_p['nome'].tolist())
-            nome_p = st.text_input("Nome") if selecao == "+ NOVO PRODUTO" else selecao
-            qtd_in = st.number_input("Qtd Entrada", min_value=1)
-            val_in = st.date_input("Validade")
-        with col2:
-            custo_un = st.number_input("Custo Unitário (R$)", min_value=0.0)
-            margem = st.slider("Margem (%)", 10, 300, 50)
-            sugestao = custo_un * (1 + margem/100)
-            venda_in = st.number_input("Venda Final (R$)", value=float(sugestao))
-            min_in = st.number_input("Estoque Mínimo", value=5)
-
-        if st.form_submit_button("SALVAR E ATUALIZAR ESTOQUE"):
-            if not nome_p: st.error("Nome obrigatório")
-            else:
-                if selecao in df_p['nome'].tolist():
-                    idx = df_p[df_p['nome'] == selecao].index[0]
-                    df_p.at[idx, 'estoque'] += qtd_in
-                    df_p.at[idx, 'preco'] = venda_in
-                    df_p.at[idx, 'validade'] = val_in.strftime("%d/%m/%Y")
-                    df_p.at[idx, 'estoque_minimo'] = min_in
-                else:
-                    novo = pd.DataFrame([{"nome": nome_p, "estoque": qtd_in, "validade": val_in.strftime("%d/%m/%Y"), "preco": venda_in, "estoque_minimo": min_in}])
-                    df_p = pd.concat([df_p, novo], ignore_index=True)
-                
-                conn.update(worksheet="produtos", data=df_p)
-                st.cache_data.clear()
-                st.success("Estoque Atualizado!")
-                st.rerun()
-
-# ==================== 3. FINANCEIRO (DESPESAS) ====================
-elif menu == "📈 Financeiro (Despesas Fixas)":
-    st.header("📈 Despesas Fixas (Mensais)")
-    df_pdvs = carregar_dados("pontos", COLUNAS_PONTOS)
-    df_desp = carregar_dados("despesas", COLUNAS_DESPESAS)
-    with st.form("f_desp"):
-        p_v = st.selectbox("PDV", df_pdvs['nome'].tolist()) if not df_pdvs.empty else ["-"]
-        d_v = st.text_input("Descrição")
-        v_v = st.number_input("Valor", min_value=0.0)
-        if st.form_submit_button("Lançar"):
-            nova = pd.DataFrame([{"pdv": p_v, "descricao": d_v, "valor": v_v, "vencimento": datetime.now().strftime("%d/%m/%Y")}])
-            conn.update(worksheet="despesas", data=pd.concat([df_desp, nova], ignore_index=True))
-            st.cache_data.clear()
-            st.rerun()
-    st.dataframe(df_desp, use_container_width=True)
-
-# ==================== 4. FRENTE DE CAIXA (VENDA COM TAXA PIX) ====================
-elif menu == "🛍️ Frente de Caixa (PDV)":
-    st.header("🛍️ Registro de Venda")
-    df_p = carregar_dados("produtos", COLUNAS_PRODUTOS)
-    df_m = carregar_dados("maquinas", COLUNAS_MAQUINAS)
-    df_pts = carregar_dados("pontos", COLUNAS_PONTOS)
-
-    with st.form("pdv"):
-        f_pdv = st.selectbox("PDV", df_pts['nome'].tolist()) if not df_pts.empty else ["-"]
-        f_maq = st.selectbox("Máquina", df_m[df_m['pdv_vinculado'] == f_pdv]['nome_maquina'].tolist() if not df_m.empty else ["Dinheiro"])
-        f_prod = st.selectbox("Produto", df_p['nome'].tolist()) if not df_p.empty else ["-"]
-        f_qtd = st.number_input("Qtd", min_value=1)
-        f_forma = st.selectbox("Forma", ["Débito", "Crédito", "Pix", "Dinheiro"])
-
-        if st.form_submit_button("FINALIZAR VENDA"):
-            idx = df_p[df_p['nome'] == f_prod].index[0]
-            bruto = df_p.at[idx, 'preco'] * f_qtd
-            
-            # Cálculo de Taxa (Incluindo Pix)
-            taxa = 0.0
-            if f_maq != "Dinheiro":
-                m_info = df_m[df_m['nome_maquina'] == f_maq].iloc[0]
-                if f_forma == "Débito": taxa = m_info['taxa_debito']
-                elif f_forma == "Crédito": taxa = m_info['taxa_credito']
-                elif f_forma == "Pix": taxa = m_info['taxa_pix']
-            
-            liq = bruto * (1 - (taxa/100))
-            
-            nova_v = pd.DataFrame([{"data": datetime.now().strftime("%d/%m/%Y %H:%M"), "pdv": f_pdv, "maquina": f_maq, "produto": f_prod, "valor_bruto": bruto, "valor_liquido": liq, "forma": f_forma}])
-            df_p.at[idx, 'estoque'] -= f_qtd
-            
-            conn.update(worksheet="vendas", data=pd.concat([carregar_dados("vendas", COLUNAS_VENDAS), nova_v], ignore_index=True))
-            conn.update(worksheet="produtos", data=df_p)
-            st.cache_data.clear()
-            st.success("Venda Concluída!")
-            st.rerun()
-
-# ==================== 7. CONFIGURAÇÕES (MAQUINAS + TAXA PIX) ====================
-elif menu == "📟 Configurações (Taxas/PDVs)":
-    st.header("📟 Unidades e Máquinas")
-    df_pdv = carregar_dados("pontos", COLUNAS_PONTOS)
-    df_maq = carregar_dados("maquinas", COLUNAS_MAQUINAS)
-
+    
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("📍 Unidades")
-        n_p = st.text_input("Nome PDV")
-        if st.button("Salvar PDV"):
-            conn.update(worksheet="pontos", data=pd.concat([df_pdv, pd.DataFrame([{"nome": n_p}])], ignore_index=True))
-            st.cache_data.clear(); st.rerun()
-        st.table(df_pdv)
+        st.subheader("🚨 Alerta de Estoque Baixo")
+        baixo = prods[prods['estoque'] <= prods['estoque_minimo']]
+        if not baixo.empty:
+            st.warning(f"Existem {len(baixo)} produtos precisando de reposição.")
+            st.dataframe(baixo[['nome', 'estoque', 'estoque_minimo']], use_container_width=True, hide_index=True)
+        else: st.success("Estoque em níveis normais.")
 
     with c2:
-        st.subheader("📟 Máquinas e Taxas")
-        with st.form("m"):
-            mn = st.text_input("Máquina")
-            mv = st.selectbox("PDV", df_pdv['nome'].tolist()) if not df_pdv.empty else ["-"]
-            t1, t2, t3 = st.columns(3)
-            td = t1.number_input("Débito %")
-            tc = t2.number_input("Crédito %")
-            tp = t3.number_input("Pix %") # CAMPO NOVO
-            if st.form_submit_button("Salvar Máquina"):
-                nova_m = pd.DataFrame([{"nome_maquina": mn, "pdv_vinculado": mv, "taxa_debito": td, "taxa_credito": tc, "taxa_pix": tp}])
-                conn.update(worksheet="maquinas", data=pd.concat([df_maq, nova_m], ignore_index=True))
-                st.cache_data.clear(); st.rerun()
-        st.dataframe(df_maq, use_container_width=True)
+        st.subheader("📅 Alerta de Vencimento (30 dias)")
+        hoje = datetime.now()
+        vencendo = []
+        for _, r in prods.iterrows():
+            try:
+                dt_venc = datetime.strptime(r['validade'], "%d/%m/%Y")
+                if dt_venc <= hoje + timedelta(days=30):
+                    vencendo.append({"Produto": r['nome'], "Vencimento": r['validade'], "Dias Restantes": (dt_venc - hoje).days})
+            except: continue
+        
+        if vencendo:
+            st.error(f"{len(vencendo)} produtos próximos ao vencimento!")
+            st.dataframe(pd.DataFrame(vencendo), use_container_width=True, hide_index=True)
+        else: st.success("Nenhum produto vencendo em breve.")
 
-# Abas de visualização simples (Estoque e Fornecedores)
-elif menu == "📦 Inventário (Estoque)":
-    st.dataframe(carregar_dados("produtos", COLUNAS_PRODUTOS), use_container_width=True)
-elif menu == "🚚 Fornecedores":
-    st.dataframe(carregar_dados("fornecedores", COLUNAS_FORNECEDORES), use_container_width=True)
+# ==================== 2. RELATÓRIOS CONTÁBEIS (NOVO) ====================
+elif menu == "📂 Relatórios Contábeis":
+    st.header("📂 Relatórios de Fechamento por PDV")
+    vendas = carregar_dados("vendas", COLUNAS_VENDAS)
+    despesas = carregar_dados("despesas", COLUNAS_DESPESAS)
+    
+    pdv_sel = st.selectbox("Selecione o Ponto de Venda para Análise", ["Todos"] + list(vendas['pdv'].unique()))
+    
+    df_v = vendas if pdv_sel == "Todos" else vendas[vendas['pdv'] == pdv_sel]
+    df_d = despesas if pdv_sel == "Todos" else despesas[despesas['pdv'] == pdv_sel]
+    
+    col_res1, col_res2, col_res3 = st.columns(3)
+    bruto = df_v['valor_bruto'].sum()
+    liquido = df_v['valor_liquido'].sum()
+    gastos = df_d['valor'].sum()
+    
+    col_res1.metric("Vendas Brutas", f"R$ {bruto:,.2f}")
+    col_res2.metric("Líquido (Pós-Taxas)", f"R$ {liquido:,.2f}")
+    col_res3.metric("Resultado Final", f"R$ {liquido - gastos:,.2f}", delta=float(liquido - gastos))
+
+    st.subheader("Detalhamento de Vendas")
+    st.dataframe(df_v, use_container_width=True, hide_index=True)
+    
+    st.subheader("Detalhamento de Custos Fixos")
+    st.dataframe(df_d, use_container_width=True, hide_index=True)
+
+# ==================== 3. ENTRADA DE MERCADORIA ====================
+elif menu == "💰 Entrada de Mercadoria":
+    st.header("💰 Entrada e Precificação")
+    df_p = carregar_dados("produtos", COLUNAS_PRODUTOS)
+    with st.form("entrada"):
+        sel = st.selectbox("Produto", ["+ NOVO"] + df_p['nome'].tolist())
+        nome = st.text_input("Nome do Produto") if sel == "+ NOVO" else sel
+        c1, c2, c3 = st.columns(3)
+        qtd = c1.number_input("Quantidade", min_value=1)
+        custo = c2.number_input("Custo Unitário", min_value=0.0)
+        margem = c3.slider("Margem %", 10, 200, 50)
+        venc = st.date_input("Data de Validade")
+        
+        if st.form_submit_button("Confirmar Entrada"):
+            preco_final = custo * (1 + margem/100)
+            if sel in df_p['nome'].tolist():
+                idx = df_p[df_p['nome'] == sel].index[0]
+                df_p.at[idx, 'estoque'] += qtd
+                df_p.at[idx, 'preco'] = preco_final
+                df_p.at[idx, 'validade'] = venc.strftime("%d/%m/%Y")
+            else:
+                novo = pd.DataFrame([{"nome": nome, "estoque": qtd, "validade": venc.strftime("%d/%m/%Y"), "preco": preco_final, "estoque_minimo": 5}])
+                df_p = pd.concat([df_p, novo], ignore_index=True)
+            conn
