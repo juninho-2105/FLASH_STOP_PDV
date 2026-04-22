@@ -157,89 +157,84 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT (ESTRUTURA COMPLETA) ====================
-elif menu == "🛒 Self-Checkout":
-    
-    # 1. EXIBIÇÃO DO LOGO NO TOPO
-    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
-    with col_l2:
-        try:
-            # Tenta carregar a imagem. Se não achar, usa o texto estilizado.
-            st.image("logo_flash_stop.png", use_container_width=True)
-        except:
-            st.markdown("<h1 style='text-align: center; color: #2e7d32; margin-bottom:0;'>FLASH STOP</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; opacity: 0.6;'>Mini Mercado Inteligente</p>", unsafe_allow_html=True)
-    
-    st.divider()
+# ==================== 5. ÁREA DO CARRINHO (PARTE INFERIOR) ====================
+st.subheader("📋 Sua Cesta")
 
-    # 2. ÁREA DE BUSCA E SCANNER
-    # Definimos as colunas para a parte de seleção de produtos
-    col_busca, col_card = st.columns([1.5, 1])
+if st.session_state.carrinho:
+    # Transformamos o carrinho em um DataFrame para facilitar a exibição
+    df_cart = pd.DataFrame(st.session_state.carrinho)
     
-    df_p = carregar_dinamico("produtos")
-    
-    with col_busca:
-        st.subheader("🔍 Localizar Produto")
-        # O selectbox precisa de uma lista válida. Se o DF estiver vazio, cria lista vazia.
-        lista_produtos = [""] + df_p['nome'].tolist() if not df_p.empty else [""]
-        p_nome = st.selectbox("Selecione ou use o leitor:", lista_produtos)
+    # Agrupamos por produto para mostrar a quantidade corretamente
+    # Isso evita que a lista fique gigante se o cliente comprar 10 itens iguais
+    resumo_cart = df_cart.groupby('produto').agg({
+        'preco': 'first',
+        'id': 'count'
+    }).rename(columns={'id': 'qtd'}).reset_index()
 
-    # Se um produto for selecionado, mostra o card de confirmação
-    if p_nome and p_nome != "":
-        dados_p = df_p[df_p['nome'] == p_nome].iloc[0]
-        preco_unit = float(dados_p['preco_venda'])
+    # Exibição dos itens com botões de controle
+    for idx, item in resumo_cart.iterrows():
+        col_item, col_ops = st.columns([3, 1])
         
-        with col_card:
-            st.markdown(f"""
-                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #dcdfe3;">
-                    <p style="margin:0; font-size: 14px;">Preço Unitário</p>
-                    <h2 style="margin:0; color: #2e7d32;">R$ {preco_unit:.2f}</h2>
-                </div>
-            """, unsafe_allow_html=True)
+        with col_item:
+            st.write(f"**{item['produto']}** (R$ {item['preco']:.2f} un.)")
+            st.write(f"Subtotal: R$ {item['preco'] * item['qtd']:.2f}")
+        
+        with col_ops:
+            c_menos, c_qtd, c_mais = st.columns([1, 1, 1])
             
-            if st.button("➕ ADICIONAR", use_container_width=True, type="primary"):
+            if c_menos.button("➖", key=f"btn_menos_{idx}"):
+                # Remove apenas uma instância desse produto do carrinho
+                for i, p in enumerate(st.session_state.carrinho):
+                    if p['produto'] == item['produto']:
+                        st.session_state.carrinho.pop(i)
+                        break
+                st.rerun()
+            
+            c_qtd.markdown(f"<p style='text-align:center; font-size:20px;'>{item['qtd']}</p>", unsafe_allow_html=True)
+            
+            if c_mais.button("➕", key=f"btn_mais_{idx}"):
+                # Adiciona mais uma instância
                 st.session_state.carrinho.append({
                     "id": len(st.session_state.carrinho) + 1,
-                    "produto": p_nome,
-                    "preco": preco_unit
+                    "produto": item['produto'],
+                    "preco": item['preco']
                 })
-                st.toast(f"{p_nome} adicionado!")
-                time.sleep(0.5)
                 st.rerun()
 
-    st.write("") # Espaçador visual
     st.divider()
 
-    # 3. ÁREA DO CARRINHO (ESTRUTURA INFERIOR)
-    st.subheader("📋 Sua Cesta")
+    # --- TOTAIS E AÇÕES FINAIS ---
+    v_total_venda = df_cart['preco'].sum()
     
-    if st.session_state.carrinho:
-        df_cart = pd.DataFrame(st.session_state.carrinho)
-        v_total = df_cart['preco'].sum()
+    col_canc, col_total_final = st.columns([1, 1])
+    
+    with col_canc:
+        # BOTÃO CANCELAR VENDA (Limpa tudo e reseta a busca)
+        if st.button("❌ CANCELAR VENDA", use_container_width=True, type="secondary"):
+            st.session_state.carrinho = []
+            st.toast("Venda cancelada!")
+            time.sleep(1)
+            st.rerun()
 
-        # Exibe a tabela do carrinho
-        st.dataframe(df_cart[['produto', 'preco']], use_container_width=True, hide_index=True)
-        
-        # Rodapé com Total e Pagamento
-        c_tot, c_pag = st.columns([1, 1])
-        
-        with c_tot:
-            st.metric("TOTAL A PAGAR", f"R$ {v_total:.2f}")
-            if st.button("🗑️ Limpar Tudo", use_container_width=True):
-                st.session_state.carrinho = []
-                st.rerun()
-        
-        with c_pag:
-            forma_pag = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
-            if st.button("🚀 FINALIZAR COMPRA", use_container_width=True, type="primary"):
-                # Aqui você chama sua função de salvar venda
-                st.success("Pagamento Confirmado!")
-                st.session_state.carrinho = []
-                time.sleep(2)
-                st.rerun()
-    else:
-        st.info("O carrinho está vazio. Busque um produto acima para começar.")
+    with col_total_final:
+        st.markdown(f"""
+            <div style="background-color: #1e1e1e; color: white; padding: 10px; border-radius: 10px; text-align: center;">
+                <p style="margin:0; font-size: 12px; opacity: 0.8;">VALOR TOTAL</p>
+                <h2 style="margin:0;">R$ {v_total_venda:.2f}</h2>
+            </div>
+        """, unsafe_allow_html=True)
 
+    # Botão de Fechamento Principal
+    st.write("")
+    if st.button("🚀 FINALIZAR E PAGAR", use_container_width=True, type="primary"):
+        # Aqui entra sua lógica de salvar no Sheets que já configuramos
+        st.success("Pagamento aprovado! Retire seus produtos.")
+        st.session_state.carrinho = []
+        time.sleep(2)
+        st.rerun()
+
+else:
+    st.info("O carrinho está vazio.")
 
 
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
