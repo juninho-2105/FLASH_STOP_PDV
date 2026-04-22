@@ -138,9 +138,9 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT (BIPOU-ENTROU + AJUSTE DE QTD) ====================
+# ==================== 5. SELF-CHECKOUT (MODO TURBO - ANTI-ERRO QUOTA) ====================
 elif menu == "🛒 Self-Checkout":
-    # Saudação por horário
+    # 1. Saudação por horário
     hora_atual = datetime.now().hour
     if hora_atual < 12: saudacao = "Bom dia"
     elif hora_atual < 18: saudacao = "Boa tarde"
@@ -148,8 +148,12 @@ elif menu == "🛒 Self-Checkout":
 
     st.header(f"🛒 {saudacao}! Bem-vindo à Flash Stop")
     
+    # 2. Lógica de Cache para evitar erro 429 (Limite do Google)
+    # Definimos um tempo de vida (TTL) para a leitura não sobrecarregar o Google
     try:
+        # Usamos o cache para buscar produtos
         df_p = carregar_dinamico("produtos")
+        
         col_esq, col_dir = st.columns([1.2, 1.3])
 
         with col_esq:
@@ -157,13 +161,14 @@ elif menu == "🛒 Self-Checkout":
             prods_ativos = df_p[df_p['estoque'].astype(int) > 0]
             lista_nomes = [""] + prods_ativos['nome'].tolist()
             
+            # Selectbox preparada para o leitor de código de barras
             sel = st.selectbox("Aponte o leitor para o código:", lista_nomes, key="leitor_ba")
             
             if sel:
                 d = df_p[df_p['nome'] == sel].iloc[0]
                 preco_unit = float(d['preco'])
                 
-                # Verifica se o item já está no carrinho
+                # Agrupamento inteligente no carrinho
                 item_no_carrinho = False
                 for idx, item in enumerate(st.session_state.carrinho):
                     if item['item'] == sel:
@@ -178,6 +183,7 @@ elif menu == "🛒 Self-Checkout":
                     })
                 
                 st.toast(f"✅ {sel} adicionado!")
+                # Pequena pausa para o usuário ver o feedback antes do rerun
                 time.sleep(0.3)
                 st.rerun()
 
@@ -186,6 +192,7 @@ elif menu == "🛒 Self-Checkout":
             if st.session_state.carrinho:
                 v_total_compra = 0
                 
+                # Interface de ajuste de quantidades [+ / -]
                 for i, item in enumerate(st.session_state.carrinho):
                     v_total_compra += item['total']
                     c_nome, c_menos, c_qtd, c_mais = st.columns([3, 1, 1, 1])
@@ -209,11 +216,12 @@ elif menu == "🛒 Self-Checkout":
                             st.session_state.carrinho[i]['total'] = st.session_state.carrinho[i]['qtd'] * item['preco']
                             st.rerun()
                         else:
-                            st.error("Sem estoque")
+                            st.error("Sem estoque disponível")
 
                 st.divider()
                 st.markdown(f"## TOTAL: R$ {v_total_compra:.2f}")
 
+                # --- PAGAMENTO ---
                 st.subheader("💳 Pagamento")
                 forma = st.radio("Escolha a forma:", ["Pix", "Débito", "Crédito"], horizontal=True)
                 
@@ -224,33 +232,46 @@ elif menu == "🛒 Self-Checkout":
                         st.rerun()
                 with col_btn2:
                     if st.button("✅ FINALIZAR", type="primary", use_container_width=True):
-                        with st.spinner("Finalizando..."):
+                        with st.spinner("Registrando..."):
                             agora = datetime.now().strftime("%d/%m/%Y %H:%M")
                             v_novas = []
                             for it in st.session_state.carrinho:
-                                v_liq = it['total'] * 0.97
+                                # Taxa fixa de 3% (ajustável conforme sua máquina)
+                                v_liq = it['total'] * 0.97 
                                 v_novas.append({
-                                    "data": agora, "pdv": st.session_state.unidade, "produto": it['item'],
-                                    "valor_bruto": it['total'], "valor_liquido": v_liq, "forma": forma
+                                    "data": agora, 
+                                    "pdv": st.session_state.unidade, 
+                                    "produto": it['item'],
+                                    "valor_bruto": it['total'], 
+                                    "valor_liquido": v_liq, 
+                                    "forma": forma
                                 })
+                                # Baixa de estoque
                                 idx_est = df_p[df_p['nome'] == it['item']].index[0]
                                 df_p.at[idx_est, 'estoque'] = int(df_p.at[idx_est, 'estoque']) - it['qtd']
                             
+                            # Envio dos dados para o Google
                             df_v_atual = carregar_dinamico("vendas")
                             conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(v_novas)], ignore_index=True))
                             conn.update(worksheet="produtos", data=df_p)
                             
+                            # IMPORTANTE: Limpa o cache após o update para a próxima leitura ser real
+                            st.cache_data.clear()
+                            
                             st.session_state.carrinho = []
-                            st.success("Obrigado!")
+                            st.success("Pagamento confirmado! Obrigado por comprar na Flash Stop.")
                             st.balloons()
                             time.sleep(3)
                             st.rerun()
             else:
-                st.info("Passe o produto no leitor para começar.")
+                st.info("Passe o produto no leitor para começar sua compra.")
     
-    # --- ESTA É A PARTE QUE FALTAVA (FECHAMENTO DO TRY) ---
     except Exception as e:
-        st.error(f"Erro no sistema: {e}")
+        # Se der o erro de quota, avisamos de forma amigável
+        if "429" in str(e):
+            st.warning("O sistema está processando muitos dados. Por favor, aguarde 10 segundos e tente bipar novamente.")
+        else:
+            st.error(f"Erro no sistema: {e}")
 
 # ==================== 6. ENTRADA MERCADORIA ====================
 elif menu == "💰 Entrada Mercadoria":
