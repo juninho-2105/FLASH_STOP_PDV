@@ -66,29 +66,74 @@ with st.sidebar:
         st.session_state.auth = False
         st.rerun()
 
-# ==================== 4. DASHBOARD ====================
+# ==================== 4. DASHBOARD (VERSÃO COMPLETA COM ALERTAS) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Performance Flash Stop")
     df_v, df_d, df_p = carregar_dinamico("vendas"), carregar_dinamico("despesas"), carregar_dinamico("produtos")
     
+    # --- CÁLCULOS FINANCEIROS ---
     bruto = pd.to_numeric(df_v['valor_bruto'], errors='coerce').sum()
     liq = pd.to_numeric(df_v['valor_liquido'], errors='coerce').sum()
     gastos = pd.to_numeric(df_d['valor'], errors='coerce').sum()
     cashback = bruto * 0.02
     res = liq - gastos - cashback
 
+    # --- MÉTRICAS PRINCIPAIS ---
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Bruto", f"R$ {bruto:,.2f}")
+    c1.metric("Bruto Total", f"R$ {bruto:,.2f}")
     c2.metric("Líquido", f"R$ {liq:,.2f}")
-    c3.metric("Custos", f"R$ {gastos:,.2f}")
-    c4.metric("Cashback", f"R$ {cashback:,.2f}")
+    c3.metric("Custos Fixos", f"R$ {gastos:,.2f}")
+    c4.metric("Cashback (2%)", f"R$ {cashback:,.2f}", delta=f"-{cashback:,.2f}", delta_color="inverse")
     c5.metric("Lucro Real", f"R$ {res:,.2f}")
 
+    st.divider()
+
+    # --- GRÁFICO DE EVOLUÇÃO ---
+    st.subheader("📈 Evolução de Vendas por Dia")
     if not df_v.empty:
-        st.subheader("📈 Evolução Diária")
         df_v['data_dt'] = pd.to_datetime(df_v['data'], format="%d/%m/%Y %H:%M", errors='coerce')
-        graf = df_v.groupby(df_v['data_dt'].dt.date)['valor_bruto'].sum()
-        st.bar_chart(graf, color="#7CFC00")
+        vendas_dia = df_v.groupby(df_v['data_dt'].dt.date)['valor_bruto'].sum()
+        st.bar_chart(vendas_dia, color="#7CFC00")
+    else:
+        st.info("Aguardando vendas para gerar o gráfico.")
+
+    st.divider()
+
+    # --- ALERTAS CRÍTICOS ---
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.subheader("🚨 Alerta de Estoque Baixo")
+        # Comparação entre estoque atual e estoque mínimo definido no inventário
+        estoque_critico = df_p[pd.to_numeric(df_p['estoque']) <= pd.to_numeric(df_p['estoque_minimo'])]
+        if not estoque_critico.empty:
+            st.warning(f"Atenção: {len(estoque_critico)} itens em nível crítico.")
+            st.dataframe(estoque_critico[['nome', 'estoque', 'estoque_minimo']], use_container_width=True, hide_index=True)
+        else:
+            st.success("✅ Estoque em dia!")
+
+    with col_b:
+        st.subheader("📅 Alerta de Validade")
+        vencendo = []
+        hoje = datetime.now()
+        margem = hoje + timedelta(days=15) # Alerta com 15 dias de antecedência
+
+        for _, item in df_p.iterrows():
+            try:
+                dt_val = datetime.strptime(str(item['validade']), "%d/%m/%Y")
+                if dt_val <= margem:
+                    vencendo.append({
+                        "Produto": item['nome'], 
+                        "Vencimento": item['validade'], 
+                        "Status": "VENCIDO" if dt_val < hoje else "Crítico"
+                    })
+            except: continue
+        
+        if vencendo:
+            st.error(f"Validade Crítica: {len(vencendo)} itens.")
+            st.table(vencendo)
+        else:
+            st.success("✅ Nenhuma validade próxima!")
 
 # ==================== 5. SELF-CHECKOUT (OTIMIZADO) ====================
 elif menu == "🛍️ Self-Checkout":
