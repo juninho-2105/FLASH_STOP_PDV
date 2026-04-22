@@ -138,7 +138,7 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT (VERSÃO FINAL COM CANCELAMENTO) ====================
+# ==================== 5. SELF-CHECKOUT (BIPOU-ENTROU + AJUSTE DE QTD) ====================
 elif menu == "🛒 Self-Checkout":
     # Saudação por horário
     hora_atual = datetime.now().hour
@@ -150,79 +150,108 @@ elif menu == "🛒 Self-Checkout":
     
     try:
         df_p = carregar_dinamico("produtos")
-        col_esq, col_dir = st.columns([1.5, 1])
+        col_esq, col_dir = st.columns([1.2, 1.3])
 
         with col_esq:
-            st.subheader("Escolha seus itens")
+            st.subheader("Escaneie o Produto")
             prods_ativos = df_p[df_p['estoque'].astype(int) > 0]
             lista_nomes = [""] + prods_ativos['nome'].tolist()
-            sel = st.selectbox("Busque o produto ou bipe o código:", lista_nomes, key="sel_prod")
+            
+            # Campo de entrada para o leitor de código de barras
+            sel = st.selectbox("Aponte o leitor para o código:", lista_nomes, key="leitor_ba")
             
             if sel:
                 d = df_p[df_p['nome'] == sel].iloc[0]
-                st.markdown(f"### R$ {float(d['preco']):.2f}")
-                qtd = st.number_input("Quantidade:", min_value=1, max_value=int(d['estoque']), value=1)
+                preco_unit = float(d['preco'])
                 
-                if st.button("➕ ADICIONAR AO CARRINHO", use_container_width=True):
+                # Verifica se o item já está no carrinho para apenas somar a quantidade
+                item_no_carrinho = False
+                for idx, item in enumerate(st.session_state.carrinho):
+                    if item['item'] == sel:
+                        st.session_state.carrinho[idx]['qtd'] += 1
+                        st.session_state.carrinho[idx]['total'] = st.session_state.carrinho[idx]['qtd'] * preco_unit
+                        item_no_carrinho = True
+                        break
+                
+                if not item_no_carrinho:
                     st.session_state.carrinho.append({
-                        "item": sel, "qtd": qtd, "preco": float(d['preco']), "total": float(d['preco']) * qtd
+                        "item": sel, "qtd": 1, "preco": preco_unit, "total": preco_unit
                     })
-                    st.rerun()
+                
+                st.toast(f"✅ {sel} adicionado!")
+                time.sleep(0.3)
+                st.rerun()
 
         with col_dir:
             st.subheader("🛍️ Seu Carrinho")
             if st.session_state.carrinho:
-                v_total = 0
-                for item in st.session_state.carrinho:
-                    v_total += item['total']
-                    st.write(f"**{item['qtd']}x** {item['item']} — R$ {item['total']:.2f}")
+                v_total_compra = 0
                 
-                st.markdown(f"## TOTAL: R$ {v_total:.2f}")
-                st.divider()
-
-                # --- ÁREA DE PAGAMENTO E CANCELAMENTO ---
-                st.subheader("💳 Pagamento")
-                forma = st.radio("Forma de pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
-                
-                btn_col1, btn_col2 = st.columns(2)
-                
-                with btn_col1:
-                    # Botão de Cancelar limpa tudo e recarrega a página
-                    if st.button("❌ CANCELAR TUDO", use_container_width=True):
-                        st.session_state.carrinho = []
-                        st.warning("Compra cancelada.")
-                        time.sleep(1)
+                # Exibe cada item com botões de controle
+                for i, item in enumerate(st.session_state.carrinho):
+                    v_total_compra += item['total']
+                    c_nome, c_menos, c_qtd, c_mais = st.columns([3, 1, 1, 1])
+                    
+                    c_nome.write(f"**{item['item']}**\n(R$ {item['preco']:.2f})")
+                    
+                    if c_menos.button("➖", key=f"min_{i}"):
+                        if item['qtd'] > 1:
+                            st.session_state.carrinho[i]['qtd'] -= 1
+                            st.session_state.carrinho[i]['total'] = st.session_state.carrinho[i]['qtd'] * item['preco']
+                        else:
+                            st.session_state.carrinho.pop(i)
                         st.rerun()
+                        
+                    c_qtd.write(f"**{item['qtd']}**")
+                    
+                    if c_mais.button("➕", key=f"add_{i}"):
+                        # Verifica estoque antes de somar
+                        estoque_disponivel = int(df_p[df_p['nome'] == item['item']].iloc[0]['estoque'])
+                        if item['qtd'] < estoque_disponivel:
+                            st.session_state.carrinho[i]['qtd'] += 1
+                            st.session_state.carrinho[i]['total'] = st.session_state.carrinho[i]['qtd'] * item['preco']
+                            st.rerun()
+                        else:
+                            st.error("Limite de estoque atingido.")
+
+                st.divider()
+                st.markdown(f"## TOTAL: R$ {v_total_compra:.2f}")
+
+                # --- PAGAMENTO E CANCELAMENTO ---
+                st.subheader("💳 Pagamento")
+                forma = st.radio("Escolha a forma:", ["Pix", "Débito", "Crédito"], horizontal=True)
                 
-                with btn_col2:
-                    # Botão de Confirmar finaliza a venda
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("❌ CANCELAR", use_container_width=True):
+                        st.session_state.carrinho = []
+                        st.rerun()
+                with col_btn2:
                     if st.button("✅ FINALIZAR", type="primary", use_container_width=True):
-                        with st.spinner("Registrando..."):
+                        with st.spinner("Finalizando..."):
+                            # Lógica de salvamento idêntica à anterior
                             agora = datetime.now().strftime("%d/%m/%Y %H:%M")
                             v_novas = []
                             for it in st.session_state.carrinho:
-                                v_liq = it['total'] * 0.97 # Taxa exemplo
+                                v_liq = it['total'] * 0.97
                                 v_novas.append({
                                     "data": agora, "pdv": st.session_state.unidade, "produto": it['item'],
                                     "valor_bruto": it['total'], "valor_liquido": v_liq, "forma": forma
                                 })
-                                idx = df_p[df_p['nome'] == it['item']].index[0]
-                                df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) - it['qtd']
+                                idx_estoque = df_p[df_p['nome'] == it['item']].index[0]
+                                df_p.at[idx_estoque, 'estoque'] = int(df_p.at[idx_estoque, 'estoque']) - it['qtd']
                             
-                            # Salva no Google Sheets
                             df_v_atual = carregar_dinamico("vendas")
                             conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(v_novas)], ignore_index=True))
                             conn.update(worksheet="produtos", data=df_p)
                             
                             st.session_state.carrinho = []
-                            st.success("Obrigado! Pode retirar seus produtos.")
+                            st.success("Obrigado! Tenha um excelente dia.")
                             st.balloons()
                             time.sleep(3)
                             st.rerun()
             else:
-                st.info("Carrinho vazio.")
-    except Exception as e:
-        st.error(f"Erro: {e}")
+                st.info("Passe o produto no leitor para começar.")
         
 # ==================== 6. ENTRADA MERCADORIA ====================
 elif menu == "💰 Entrada Mercadoria":
