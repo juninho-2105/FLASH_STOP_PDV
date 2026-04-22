@@ -138,36 +138,99 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT ====================
+# ==================== 5. SELF-CHECKOUT (COM SAUDAÇÃO E CANCELAR) ====================
 elif menu == "🛒 Self-Checkout":
-    st.header("🛒 Checkout")
-    df_p = carregar_dinamico("produtos")
-    
-    c_sel, c_car = st.columns([1.5, 1])
-    with c_sel:
-        lista_p = [""] + df_p[df_p['estoque'].astype(int) > 0]['nome'].tolist()
-        sel = st.selectbox("Produto:", lista_p)
-        if sel:
-            d = df_p[df_p['nome'] == sel].iloc[0]
-            st.write(f"Preço: R$ {float(d['preco']):.2f}")
-            qtd = st.number_input("Qtd:", min_value=1, max_value=int(d['estoque']), value=1)
-            if st.button("➕ Adicionar"):
-                st.session_state.carrinho.append({"item": sel, "qtd": qtd, "preco": float(d['preco']), "total": float(d['preco'])*qtd})
-                st.rerun()
+    # --- LÓGICA DE SAUDAÇÃO POR HORÁRIO ---
+    hora_atual = datetime.now().hour
+    if hora_atual < 12:
+        saudacao = "Bom dia"
+    elif hora_atual < 18:
+        saudacao = "Boa tarde"
+    else:
+        saudacao = "Boa noite"
 
-    with c_car:
-        st.subheader("Carrinho")
-        if st.session_state.carrinho:
-            total = 0
-            for it in st.session_state.carrinho:
-                total += it['total']
-                st.write(f"{it['qtd']}x {it['item']} - R$ {it['total']:.2f}")
-            st.markdown(f"### Total: R$ {total:.2f}")
-            if st.button("🏁 Finalizar"):
-                # Lógica de salvar simplificada para brevidade
-                st.success("Venda Concluída!")
-                st.session_state.carrinho = []
-                time.sleep(1); st.rerun()
+    st.header(f"🛒 {saudacao}! Bem-vindo à Flash Stop")
+    st.info(f"📍 Unidade: {st.session_state.unidade}")
+
+    try:
+        df_p = carregar_dinamico("produtos")
+        
+        col_esq, col_dir = st.columns([1.5, 1])
+
+        with col_esq:
+            st.subheader("Selecione os Produtos")
+            prods_ativos = df_p[df_p['estoque'].astype(int) > 0]
+            lista_nomes = [""] + prods_ativos['nome'].tolist()
+            
+            sel = st.selectbox("Busque o produto ou bipe o código:", lista_nomes, key="sel_prod")
+            
+            if sel:
+                d = df_p[df_p['nome'] == sel].iloc[0]
+                st.markdown(f"### Preço: R$ {float(d['preco']):.2f}")
+                qtd = st.number_input("Quantidade:", min_value=1, max_value=int(d['estoque']), value=1)
+                
+                if st.button("➕ ADICIONAR AO CARRINHO", use_container_width=True):
+                    st.session_state.carrinho.append({
+                        "item": sel, "qtd": qtd, "preco": float(d['preco']), "total": float(d['preco']) * qtd
+                    })
+                    st.toast(f"{sel} adicionado!")
+                    time.sleep(0.5)
+                    st.rerun()
+
+        with col_dir:
+            st.subheader("🛍️ Seu Carrinho")
+            if st.session_state.carrinho:
+                v_total = 0
+                for item in st.session_state.carrinho:
+                    v_total += item['total']
+                    st.write(f"**{item['qtd']}x** {item['item']} — R$ {item['total']:.2f}")
+                
+                st.markdown(f"## TOTAL: R$ {v_total:.2f}")
+                
+                # --- OPÇÕES DE CANCELAR OU FINALIZAR ---
+                c1, c2 = st.columns(2)
+                
+                with c1:
+                    if st.button("❌ CANCELAR COMPRA", use_container_width=True):
+                        st.session_state.carrinho = []
+                        st.warning("Compra cancelada e carrinho limpo.")
+                        time.sleep(1)
+                        st.rerun()
+                
+                with c2:
+                    # O botão de finalizar fica em destaque (primary)
+                    finalizar = st.button("✅ IR PARA PAGAMENTO", type="primary", use_container_width=True)
+
+                if finalizar:
+                    st.divider()
+                    forma = st.radio("Escolha a forma de pagamento na maquininha:", ["Pix", "Débito", "Crédito"], horizontal=True)
+                    
+                    if st.button("CONFIRMAR PAGAMENTO", use_container_width=True):
+                        with st.spinner("Finalizando sua compra..."):
+                            agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            v_novas = []
+                            for it in st.session_state.carrinho:
+                                v_liq = it['total'] * 0.97
+                                v_novas.append({
+                                    "data": agora, "pdv": st.session_state.unidade, "produto": it['item'],
+                                    "valor_bruto": it['total'], "valor_liquido": v_liq, "forma": forma
+                                })
+                                idx = df_p[df_p['nome'] == it['item']].index[0]
+                                df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) - it['qtd']
+                            
+                            df_v_atual = carregar_dinamico("vendas")
+                            conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(v_novas)], ignore_index=True))
+                            conn.update(worksheet="produtos", data=df_p)
+                            
+                            st.session_state.carrinho = []
+                            st.success(f"Obrigado pela compra! Tenha um ótimo dia.")
+                            st.balloons()
+                            time.sleep(3)
+                            st.rerun()
+            else:
+                st.info("Seu carrinho está vazio. Comece selecionando um produto ao lado.")
+    except Exception as e:
+        st.error(f"Erro no Checkout: {e}")
 
 # ==================== 6. ENTRADA MERCADORIA ====================
 elif menu == "💰 Entrada Mercadoria":
