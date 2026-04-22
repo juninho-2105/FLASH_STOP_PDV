@@ -26,23 +26,31 @@ def carregar_dinamico(aba):
 # ==================== CSS PARA OCULTAR ÍCONES DO STREAMLIT ====================
 st.markdown("""
     <style>
-        /* Oculta o menu de opções (três linhas) no topo direito */
+        /* 1. Esconde o menu de 3 linhas (topo direito) */
         #MainMenu {visibility: hidden;}
         
-        /* Oculta o rodapé "Made with Streamlit" */
+        /* 2. Esconde o rodapé (Made with Streamlit) */
         footer {visibility: hidden;}
         
-        /* Oculta o cabeçalho padrão do Streamlit */
+        /* 3. Esconde o Header (barra superior) */
         header {visibility: hidden;}
         
-        /* Oculta o ícone de "deploy" (caso esteja usando Streamlit Cloud) */
+        /* 4. Esconde o botão de Deploy (botão vermelho da coroa) */
         .stDeployButton {display:none;}
         
-        /* Ajusta o espaçamento do topo para o logo não ficar colado */
+        /* 5. Esconde o botão de ajuda/status (o ícone azul/vermelho no canto) */
+        .stStatusWidget {display:none;}
+        [data-testid="stStatusWidget"] {display:none;}
+        
+        /* 6. Remove o padding extra que o Streamlit coloca no topo */
         .block-container {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
+            padding-top: 0rem;
+            padding-bottom: 0rem;
         }
+        
+        /* 7. Esconde qualquer elemento de toolbar/ajuda flutuante */
+        [data-testid="stToolbar"] {visibility: hidden;}
+        [data-testid="stDecoration"] {display:none;}
     </style>
 """, unsafe_allow_html=True)
 
