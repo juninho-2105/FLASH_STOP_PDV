@@ -196,109 +196,111 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT (COMPLETO) ====================
+# ==================== 5. SELF-CHECKOUT OTIMIZADO ====================
 elif menu == "🛒 Self-Checkout":
-    # 1. LOGO E CABEÇALHO
-    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    # CSS para botões menores e compactos
+    st.markdown("""
+        <style>
+        .stButton>button {
+            border-radius: 8px;
+            height: 35px; /* Botões mais baixos */
+            font-size: 14px;
+            padding: 0px;
+        }
+        .btn-qtd {
+            font-weight: bold;
+            font-size: 18px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 1. LOGO COMPACTO
+    col_l1, col_l2, col_l3 = st.columns([1.5, 1, 1.5])
     with col_l2:
         try:
             st.image("logo_flash_stop.png", use_container_width=True)
         except:
-            st.markdown("<h1 style='text-align: center; color: #2e7d32; margin-bottom:0;'>FLASH STOP</h1>", unsafe_allow_html=True)
-    
-    st.divider()
+            st.markdown("<h3 style='text-align: center; color: #2e7d32; margin:0;'>FLASH STOP</h3>", unsafe_allow_html=True)
 
-    # 2. BUSCA DE PRODUTO
+    # 2. BUSCA AUTOMÁTICA (BIPOU, PASSOU)
     df_p = carregar_dinamico("produtos")
-    col_busca, col_card = st.columns([1.5, 1])
+    df_p.columns = df_p.columns.str.strip() # Limpeza de colunas
     
-    with col_busca:
-        st.subheader("🔍 Localizar Produto")
-        p_nome = st.selectbox("Selecione ou use o leitor:", [""] + df_p['nome'].tolist(), label_visibility="collapsed")
+    st.write("")
+    # Campo de seleção configurado para focar o leitor
+    p_nome = st.selectbox("Aguardando bip ou seleção...", [""] + df_p['nome'].tolist(), key="scanner_input")
 
     if p_nome:
         dados_p = df_p[df_p['nome'] == p_nome].iloc[0]
-        # Pegando o nome correto da coluna de preço (ajuste para 'preco' se necessário)
-        preco_unit = float(dados_p['preco_venda']) 
         
-        with col_card:
-            st.markdown(f"""
-                <div style="background-color: #f0f2f6; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #dcdfe3;">
-                    <p style="margin:0; font-size: 14px;">Preço Unitário</p>
-                    <h2 style="margin:0; color: #2e7d32;">R$ {preco_unit:.2f}</h2>
-                </div>
-            """, unsafe_allow_html=True)
-            
+        # Tentativa de pegar o preço (coluna preco_venda ou preco)
+        col_preco = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
+        preco_unit = float(dados_p[col_preco])
+        
+        # Adição automática simplificada
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.markdown(f"**{p_nome}**")
+        with c2:
             if st.button("➕ ADICIONAR", use_container_width=True, type="primary"):
                 st.session_state.carrinho.append({
                     "id": len(st.session_state.carrinho) + 1,
                     "produto": p_nome,
                     "preco": preco_unit
                 })
-                st.toast(f"{p_nome} adicionado!")
-                time.sleep(0.5)
+                st.toast("Adicionado!")
+                time.sleep(0.4)
                 st.rerun()
 
-    st.write("")
     st.divider()
 
-    # 3. ÁREA DO CARRINHO (PARTE INFERIOR)
-    st.subheader("📋 Sua Cesta")
-
+    # 3. CARRINHO COMPACTO (PARA CELULAR/MÁQUINA DE CARTÃO)
     if st.session_state.carrinho:
         df_cart = pd.DataFrame(st.session_state.carrinho)
-        
-        # Agrupamento para os botões +/- funcionarem por item
-        resumo_cart = df_cart.groupby('produto').agg({
-            'preco': 'first',
-            'id': 'count'
-        }).rename(columns={'id': 'qtd'}).reset_index()
+        resumo = df_cart.groupby('produto').agg({'preco': 'first', 'id': 'count'}).rename(columns={'id': 'qtd'}).reset_index()
 
-        for idx, item in resumo_cart.iterrows():
-            col_item, col_ops = st.columns([3, 1])
-            with col_item:
-                st.write(f"**{item['produto']}** (R$ {item['preco']:.2f} un.)")
-                st.write(f"Subtotal: R$ {item['preco'] * item['qtd']:.2f}")
+        for idx, item in resumo.iterrows():
+            # Layout em linha única para economizar espaço
+            col_txt, col_btns = st.columns([2, 1.5])
             
-            with col_ops:
-                c_menos, c_qtd, c_mais = st.columns([1, 1, 1])
-                if c_menos.button("➖", key=f"btn_menos_{idx}"):
+            with col_txt:
+                st.markdown(f"<small>{item['produto']}</small><br><b>R$ {item['preco']*item['qtd']:.2f}</b>", unsafe_allow_html=True)
+            
+            with col_btns:
+                # Botões de + e - em miniatura
+                m1, m2, m3 = st.columns([1, 1, 1])
+                if m1.button("—", key=f"m_{idx}"):
                     for i, p in enumerate(st.session_state.carrinho):
                         if p['produto'] == item['produto']:
                             st.session_state.carrinho.pop(i)
                             break
                     st.rerun()
                 
-                c_qtd.markdown(f"<p style='text-align:center; font-size:20px;'>{item['qtd']}</p>", unsafe_allow_html=True)
+                m2.markdown(f"<p style='text-align:center; margin-top:5px;'>{item['qtd']}</p>", unsafe_allow_html=True)
                 
-                if c_mais.button("➕", key=f"btn_mais_{idx}"):
-                    st.session_state.carrinho.append({"id": len(st.session_state.carrinho)+1, "produto": item['produto'], "preco": item['preco']})
+                if m3.button("＋", key=f"p_{idx}"):
+                    st.session_state.carrinho.append({"id":99, "produto":item['produto'], "preco":item['preco']})
                     st.rerun()
 
         st.divider()
-        v_total_venda = df_cart['preco'].sum()
+        v_total = df_cart['preco'].sum()
         
-        c_canc, c_tot_f = st.columns([1, 1])
-        with c_canc:
-            if st.button("❌ CANCELAR VENDA", use_container_width=True):
+        # Finalização
+        st.markdown(f"<h3 style='text-align:center;'>Total: R$ {v_total:.2f}</h3>", unsafe_allow_html=True)
+        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            if st.button("❌ CANCELAR", use_container_width=True):
                 st.session_state.carrinho = []
                 st.rerun()
-        with c_tot_f:
-            st.markdown(f"<div style='background-color:#1e1e1e;color:white;padding:10px;border-radius:10px;text-align:center;'>TOTAL: R$ {v_total_venda:.2f}</div>", unsafe_allow_html=True)
-
-        if st.button("🚀 FINALIZAR E PAGAR", use_container_width=True, type="primary"):
-            # Lógica de salvar venda aqui
-            st.success("Venda realizada!")
-            st.session_state.carrinho = []
-            time.sleep(2)
-            st.rerun()
+        with col_f2:
+            if st.button("🚀 PAGAR", use_container_width=True, type="primary"):
+                st.success("Processando...")
+                st.session_state.carrinho = []
+                time.sleep(1.5)
+                st.rerun()
     else:
-        st.info("O carrinho está vazio.")
-
-# <<< O PRÓXIMO ELIF DEVE VIR EXATAMENTE NESTA LINHA (FORA DO CHECKOUT) >>>
-elif menu == "💸 Despesas":
-    # Código das despesas aqui...
-    pass
+        st.info("Carrinho vazio")
 
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
 elif menu == "💸 Despesas":
