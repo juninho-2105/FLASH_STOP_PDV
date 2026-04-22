@@ -71,48 +71,27 @@ if menu == "📊 Dashboard & Performance":
     
     # Cálculos Financeiros
     bruto = df_v['valor_bruto'].sum()
-    liq = df_v['valor_liquido'].sum()
-    gastos = df_d['valor'].sum()
-    cashback = bruto * 0.02
+    liq = df_v['valor_liquido'].sum() # Valor já sem as taxas das máquinas
+    gastos = df_d['valor'].sum()     # Custos fixos
+    cashback = bruto * 0.02          # 2% de Cashback sobre o faturamento total
     resultado = liq - gastos - cashback
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
     c2.metric("Líquido (Pós-Taxas)", f"R$ {liq:,.2f}")
     c3.metric("Custos Fixos", f"R$ {gastos:,.2f}")
-    c4.metric("Resultado Final", f"R$ {resultado:,.2f}", delta=float(resultado))
+    c4.metric("Cashback (2%)", f"R$ {cashback:,.2f}", delta=f"-{cashback:,.2f}", delta_color="inverse")
+    c5.metric("Resultado Final", f"R$ {resultado:,.2f}", delta=f"{resultado:,.2f}")
 
     st.divider()
     
     # Gráfico de Evolução Mensal
     if not df_v.empty:
-        st.subheader("📈 Crescimento Mensal")
+        st.subheader("📈 Crescimento Mensal (Faturamento)")
         df_v['data_dt'] = pd.to_datetime(df_v['data'], dayfirst=True, errors='coerce')
         df_chart = df_v.dropna(subset=['data_dt']).set_index('data_dt').resample('M')['valor_bruto'].sum().reset_index()
         df_chart['Mês'] = df_chart['data_dt'].dt.strftime('%m/%Y')
         st.area_chart(df_chart.set_index('Mês')['valor_bruto'])
-
-    # Alertas de Validade (15 dias) e Estoque
-    st.divider()
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.subheader("🚨 Reposição de Estoque")
-        baixo = df_p[df_p['estoque'] <= df_p['estoque_minimo']]
-        if not baixo.empty: st.warning(f"{len(baixo)} itens críticos"); st.table(baixo[['nome', 'estoque']])
-        else: st.success("Estoque abastecido!")
-    
-    with col_b:
-        st.subheader("📅 Validade (Próximos 15 dias)")
-        hoje = datetime.now()
-        vencendo = []
-        for _, r in df_p.iterrows():
-            try:
-                dv = datetime.strptime(str(r['validade']), "%d/%m/%Y")
-                if dv <= hoje + timedelta(days=15):
-                    vencendo.append({"Produto": r['nome'], "Data": r['validade']})
-            except: continue
-        if vencendo: st.error(f"{len(vencendo)} itens vencendo"); st.table(vencendo)
-        else: st.success("Validades OK!")
 
 # ==================== 5. FRENTE DE CAIXA (PDV) ====================
 elif menu == "🛍️ Frente de Caixa (PDV)":
