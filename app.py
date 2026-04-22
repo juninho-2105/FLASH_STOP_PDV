@@ -239,34 +239,52 @@ elif menu == "💰 Entrada de Mercadoria":
     st.subheader("📋 Inventário Atualizado")
     st.dataframe(df_p, use_container_width=True, hide_index=True)
 
-# ==================== 8. OUTROS MÓDULOS ====================
+# ==================== 8. INVENTÁRIO GERAL (SUBSTITUA ESTE BLOCO) ====================
 elif menu == "📦 Inventário Geral":
-    st.header("📦 Estoque em Tempo Real")
-    st.dataframe(carregar("produtos"), use_container_width=True, hide_index=True)
+    st.header("📦 Gestão de Inventário e Alertas")
+    df_p = carregar("produtos")
+    
+    st.subheader("Configurar Limites de Segurança")
+    st.write("Ajuste o estoque mínimo para que o sistema emita alertas no Dashboard.")
 
+    with st.form("edit_minimo_form"):
+        col_sel, col_num = st.columns([2, 1])
+        produto_sel = col_sel.selectbox("Selecione o Produto:", df_p['nome'].tolist() if not df_p.empty else ["-"])
+        
+        estoque_min_atual = 5
+        if not df_p.empty and produto_sel != "-":
+            estoque_min_atual = int(df_p[df_p['nome'] == produto_sel].iloc[0]['estoque_minimo'])
+
+        novo_minimo = col_num.number_input("Novo Estoque Mínimo:", min_value=0, value=estoque_min_atual)
+        
+        if st.form_submit_button("Atualizar Limite de Alerta"):
+            if produto_sel != "-":
+                idx = df_p[df_p['nome'] == produto_sel].index[0]
+                df_p.at[idx, 'estoque_minimo'] = novo_minimo
+                conn.update(worksheet="produtos", data=df_p)
+                st.success(f"Limite para **{produto_sel}** atualizado!")
+                time.sleep(1)
+                st.rerun()
+
+    st.divider()
+    if not df_p.empty:
+        df_visual = df_p.copy()
+        df_visual['Status'] = df_visual.apply(lambda x: "🚨 REPOR" if x['estoque'] <= x['estoque_minimo'] else "✅ OK", axis=1)
+        st.dataframe(df_visual[['Status', 'nome', 'estoque', 'estoque_minimo', 'preco', 'validade']], use_container_width=True, hide_index=True)
+
+# ==================== 9. FORNECEDORES (MANTENHA COMO ESTÁ) ====================
 elif menu == "🚚 Fornecedores":
     st.header("🚚 Gestão de Parceiros")
     df_f = carregar("fornecedores")
     with st.form("f_form"):
         n = st.text_input("Nome Fantasia"); c = st.text_input("CNPJ/CPF")
         if st.form_submit_button("Salvar Fornecedor"):
-            conn.update(worksheet="fornecedores", data=pd.concat([df_f, pd.DataFrame([{"nome_fantasia": n, "cnpj_cpf": c}])], ignore_index=True)); st.rerun()
+            conn.update(worksheet="fornecedores", data=pd.concat([df_f, pd.DataFrame([{"nome_fantasia": n, "cnpj_cpf": c}])], ignore_index=True))
+            st.rerun()
     st.dataframe(df_f, use_container_width=True, hide_index=True)
 
+# ==================== 10. CONFIGURAÇÕES (MANTENHA COMO ESTÁ) ====================
 elif menu == "📟 Configurações":
     st.header("📟 Unidades e Taxas")
     df_pts, df_maq = carregar("pontos"), carregar("maquinas")
-    
-    t1, t2 = st.tabs(["Unidades/PDV", "Máquinas de Cartão"])
-    with t1:
-        n_p = st.text_input("Novo PDV")
-        if st.button("Cadastrar PDV"):
-            conn.update(worksheet="pontos", data=pd.concat([df_pts, pd.DataFrame([{"nome": n_p}])], ignore_index=True)); st.rerun()
-        st.dataframe(df_pts, use_container_width=True)
-    with t2:
-        with st.form("maq_f"):
-            mn = st.text_input("Nome Máquina"); mv = st.selectbox("PDV Vinculado", df_pts['nome'].tolist() if not df_pts.empty else ["-"])
-            c1, c2, c3 = st.columns(3); p = c1.number_input("Pix %"); d = c2.number_input("Débito %"); c = c3.number_input("Crédito %")
-            if st.form_submit_button("Salvar Máquina"):
-                conn.update(worksheet="maquinas", data=pd.concat([df_maq, pd.DataFrame([{"nome_maquina": mn, "pdv_vinculado": mv, "taxa_debito": d, "taxa_credito": c, "taxa_pix": p}])], ignore_index=True)); st.rerun()
-        st.dataframe(df_maq, use_container_width=True) 
+    # ... resto do código de configurações ...
