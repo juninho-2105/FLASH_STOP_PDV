@@ -49,41 +49,41 @@ if not st.session_state.autenticado:
                 st.error("Usuário não encontrado.")
     st.stop()
 
-# ==================== 3. MENU LATERAL ====================
-st.sidebar.title("⚡ Flash Stop")
-st.sidebar.write(f"📍 **{st.session_state.unidade}**")
-st.sidebar.write(f"👤 Perfil: **{st.session_state.perfil.upper()}**")
+# ==================== 3. NAVEGAÇÃO E LOGICA DE TELAS ====================
 
-st.sidebar.divider()
+# Primeiro, verificamos as opções do menu que você definiu no sidebar.radio
+if menu == "📊 Dashboard":
+    # ... código do dashboard ...
+    pass
 
-# Navegação dependendo do perfil
-if st.session_state.perfil == "admin":
-    menu = st.sidebar.radio("Navegação", [
-        "📊 Dashboard", 
-        "🛒 Self-Checkout", 
-        "💰 Entrada Mercadoria", 
-        "📦 Inventário", 
-        "💸 Despesas",
-        "📂 Contabilidade", 
-        "📟 Configurações"
-    ])
+elif menu == "🛒 Self-Checkout":
+    # ... código do checkout ...
+    pass
+
+elif menu == "💰 Entrada Mercadoria":
+    # ... código de entrada ...
+    pass
+
+elif menu == "📦 Inventário":
+    # ... código de inventário ...
+    pass
+
+# O SEU ERRO ESTAVA AQUI: O 'elif' abaixo não pode ter um 'else' antes dele
+elif menu == "💸 Despesas":
+    st.header("💸 Gestão de Despesas")
+    # ... seu código de despesas que geramos anteriormente ...
+
+elif menu == "📂 Contabilidade":
+    # ... código de contabilidade ...
+    pass
+
+elif menu == "📟 Configurações":
+    # ... código de configurações ...
+    pass
+
+# O 'else' só entra aqui se você quiser uma página padrão de erro ou boas-vindas
 else:
-    menu = st.sidebar.radio("Navegação", ["🛒 Self-Checkout", "📦 Inventário"])
-
-st.sidebar.divider()
-
-# BOTÃO SAIR (LOGOUT)
-if st.sidebar.button("🚪 SAIR / TROCAR USUÁRIO", use_container_width=True, type="secondary"):
-    # Limpa todas as variáveis de controle de acesso
-    st.session_state.autenticado = False
-    st.session_state.unidade = ""
-    st.session_state.perfil = ""
-    st.session_state.carrinho = [] # Limpa o carrinho por segurança
-    
-    st.toast("Efetuando logout...")
-    time.sleep(1)
-    st.rerun() # Volta para a tela de login (Seção 2)
-
+    st.write("Selecione uma opção no menu lateral.")
 # ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Performance Financeira")
