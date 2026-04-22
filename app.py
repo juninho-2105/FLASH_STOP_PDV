@@ -176,21 +176,56 @@ elif menu == "📦 Inventário":
             conn.update(worksheet="produtos", data=df_prod)
             st.success("Limite salvo!"); st.rerun()
 
-# ==================== 9. CONTABILIDADE (REVISADO) ====================
+# ==================== 9. CONTABILIDADE (FILTRADA E EXPORTÁVEL) ====================
 elif menu == "📂 Contabilidade":
-    st.header("📂 Histórico de Vendas")
+    st.header("📂 Relatórios de Vendas")
     df_vendas = carregar("vendas")
+    df_pts = carregar("pontos")
+
     if not df_vendas.empty:
-        st.dataframe(df_vendas, use_container_width=True)
-        csv_data = df_vendas.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="📥 Baixar Relatório CSV",
-            data=csv_data,
-            file_name="vendas_flash_stop.csv",
-            mime="text/csv"
-        )
+        # Filtro por PDV para o Contador
+        unidades = ["Todos"] + df_pts["nome"].tolist()
+        filtro_pdv = st.selectbox("Filtrar relatório por Unidade (PDV):", unidades)
+
+        df_filtrado = df_vendas.copy()
+        if filtro_pdv != "Todos":
+            df_filtrado = df_vendas[df_vendas["pdv"] == filtro_pdv]
+
+        st.subheader(f"Relatório: {filtro_pdv}")
+        st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
+
+        # Resumo para o Contador
+        col_c1, col_c2 = st.columns(2)
+        total_bruto_f = df_filtrado["valor_bruto"].sum()
+        total_liq_f = df_filtrado["valor_liquido"].sum()
+        
+        col_c1.metric("Total Bruto Filtrado", f"R$ {total_bruto_f:,.2f}")
+        col_c2.metric("Total Líquido Filtrado", f"R$ {total_liq_f:,.2f}")
+
+        st.divider()
+        
+        c_exp1, c_exp2 = st.columns(2)
+        
+        with c_exp1:
+            # Função de Exportar para o Contador (CSV formatado para Excel)
+            csv_contabil = df_filtrado.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                label="📤 EXPORTAR PARA CONTADOR (Excel/CSV)",
+                data=csv_contabil,
+                file_name=f"relatorio_contabil_{filtro_pdv}_{datetime.now().strftime('%m_%Y')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                help="Baixe o arquivo e anexe ao e-mail do seu contador."
+            )
+
+        with c_exp2:
+            # Função de Impressão
+            if st.button("🖨️ PREPARAR PARA IMPRIMIR", use_container_width=True):
+                st.info("💡 Pressione 'Ctrl + P' (ou Cmd + P no Mac) para imprimir a tabela exibida acima.")
+                time.sleep(1)
+
     else:
-        st.info("Nenhuma venda registrada até o momento.")
+        st.info("Nenhuma venda registrada para gerar relatórios.")
 
 # ==================== 10. CONFIGURAÇÕES (REVISADO) ====================
 elif menu == "📟 Configurações":
