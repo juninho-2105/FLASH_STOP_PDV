@@ -66,7 +66,7 @@ with st.sidebar:
         st.session_state.auth = False
         st.rerun()
 
-# ==================== 4. DASHBOARD (VERSÃO COMPLETA COM ALERTAS) ====================
+# ==================== 4. DASHBOARD (COM QUANTIDADE NOS ALERTAS) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Performance Flash Stop")
     df_v, df_d, df_p = carregar_dinamico("vendas"), carregar_dinamico("despesas"), carregar_dinamico("produtos")
@@ -78,12 +78,12 @@ if menu == "📊 Dashboard":
     cashback = bruto * 0.02
     res = liq - gastos - cashback
 
-    # --- MÉTRICAS PRINCIPAIS ---
+    # --- MÉTRICAS ---
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Bruto Total", f"R$ {bruto:,.2f}")
     c2.metric("Líquido", f"R$ {liq:,.2f}")
     c3.metric("Custos Fixos", f"R$ {gastos:,.2f}")
-    c4.metric("Cashback (2%)", f"R$ {cashback:,.2f}", delta=f"-{cashback:,.2f}", delta_color="inverse")
+    c4.metric("Cashback (2%)", f"R$ {cashback:,.2f}")
     c5.metric("Lucro Real", f"R$ {res:,.2f}")
 
     st.divider()
@@ -94,8 +94,6 @@ if menu == "📊 Dashboard":
         df_v['data_dt'] = pd.to_datetime(df_v['data'], format="%d/%m/%Y %H:%M", errors='coerce')
         vendas_dia = df_v.groupby(df_v['data_dt'].dt.date)['valor_bruto'].sum()
         st.bar_chart(vendas_dia, color="#7CFC00")
-    else:
-        st.info("Aguardando vendas para gerar o gráfico.")
 
     st.divider()
 
@@ -104,7 +102,6 @@ if menu == "📊 Dashboard":
 
     with col_a:
         st.subheader("🚨 Alerta de Estoque Baixo")
-        # Comparação entre estoque atual e estoque mínimo definido no inventário
         estoque_critico = df_p[pd.to_numeric(df_p['estoque']) <= pd.to_numeric(df_p['estoque_minimo'])]
         if not estoque_critico.empty:
             st.warning(f"Atenção: {len(estoque_critico)} itens em nível crítico.")
@@ -116,14 +113,16 @@ if menu == "📊 Dashboard":
         st.subheader("📅 Alerta de Validade")
         vencendo = []
         hoje = datetime.now()
-        margem = hoje + timedelta(days=15) # Alerta com 15 dias de antecedência
+        margem = hoje + timedelta(days=15) 
 
         for _, item in df_p.iterrows():
             try:
                 dt_val = datetime.strptime(str(item['validade']), "%d/%m/%Y")
                 if dt_val <= margem:
+                    # ADICIONADA A COLUNA 'ESTOQUE' NO ALERTA
                     vencendo.append({
                         "Produto": item['nome'], 
+                        "Qtd em Estoque": int(item['estoque']), # Nova informação
                         "Vencimento": item['validade'], 
                         "Status": "VENCIDO" if dt_val < hoje else "Crítico"
                     })
@@ -131,10 +130,10 @@ if menu == "📊 Dashboard":
         
         if vencendo:
             st.error(f"Validade Crítica: {len(vencendo)} itens.")
-            st.table(vencendo)
+            # Exibindo a tabela com a quantidade
+            st.dataframe(pd.DataFrame(vencendo), use_container_width=True, hide_index=True)
         else:
             st.success("✅ Nenhuma validade próxima!")
-
 # ==================== 5. SELF-CHECKOUT (OTIMIZADO) ====================
 elif menu == "🛍️ Self-Checkout":
     h = datetime.now().hour
