@@ -144,11 +144,10 @@ elif menu == "🛒 Self-Checkout":
 
         with col_esq:
             st.subheader("Selecione os Produtos")
-            # Lista apenas produtos com estoque > 0
             prods_ativos = df_p[df_p['estoque'].astype(int) > 0]
             lista_nomes = [""] + prods_ativos['nome'].tolist()
             
-            sel = st.selectbox("Busque o produto ou bipe o código:", lista_nomes, key="sel_prod")
+            sel = st.selectbox("Busque o produto:", lista_nomes, key="sel_prod")
             
             if sel:
                 d = df_p[df_p['nome'] == sel].iloc[0]
@@ -165,4 +164,45 @@ elif menu == "🛒 Self-Checkout":
 
         with col_dir:
             st.subheader("🛍️ Seu Carrinho")
+            # --- LINHA 168 (Onde estava o erro) ---
             if st.session_state.carrinho:
+                v_total = 0
+                for item in st.session_state.carrinho:
+                    v_total += item['total']
+                    st.write(f"**{item['qtd']}x** {item['item']} — R$ {item['total']:.2f}")
+                
+                st.markdown(f"## TOTAL: R$ {v_total:.2f}")
+                
+                if st.button("🗑️ Limpar Tudo"):
+                    st.session_state.carrinho = []
+                    st.rerun()
+
+                st.divider()
+                forma = st.radio("Pagamento na Maquininha:", ["Pix", "Débito", "Crédito"], horizontal=True)
+                
+                if st.button("✅ FINALIZAR E PAGAR", type="primary", use_container_width=True):
+                    with st.spinner("Salvando venda..."):
+                        agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        v_novas = []
+                        for it in st.session_state.carrinho:
+                            v_liq = it['total'] * 0.97
+                            v_novas.append({
+                                "data": agora, "pdv": st.session_state.unidade, "produto": it['item'],
+                                "valor_bruto": it['total'], "valor_liquido": v_liq, "forma": forma
+                            })
+                            idx = df_p[df_p['nome'] == it['item']].index[0]
+                            df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) - it['qtd']
+                        
+                        df_v_atual = carregar_dinamico("vendas")
+                        conn.update(worksheet="vendas", data=pd.concat([df_v_atual, pd.DataFrame(v_novas)], ignore_index=True))
+                        conn.update(worksheet="produtos", data=df_p)
+                        
+                        st.session_state.carrinho = []
+                        st.success("Venda registrada!")
+                        st.balloons()
+                        time.sleep(2)
+                        st.rerun()
+            else:
+                st.info("Carrinho vazio. Selecione um item ao lado.")
+    except Exception as e:
+        st.error(f"Erro no Checkout: {e}")
