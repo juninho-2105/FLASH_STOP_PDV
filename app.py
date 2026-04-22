@@ -52,15 +52,37 @@ if not st.session_state.autenticado:
 # ==================== 3. MENU LATERAL ====================
 st.sidebar.title("⚡ Flash Stop")
 st.sidebar.write(f"📍 **{st.session_state.unidade}**")
+st.sidebar.write(f"👤 Perfil: **{st.session_state.perfil.upper()}**")
 
+st.sidebar.divider()
+
+# Navegação dependendo do perfil
 if st.session_state.perfil == "admin":
-    # Adicionada a opção "💸 Despesas" na lista abaixo
     menu = st.sidebar.radio("Navegação", [
-        "📊 Dashboard", "🛒 Self-Checkout", "💰 Entrada Mercadoria", 
-        "📦 Inventário", "💸 Despesas", "📂 Contabilidade", "📟 Configurações"
+        "📊 Dashboard", 
+        "🛒 Self-Checkout", 
+        "💰 Entrada Mercadoria", 
+        "📦 Inventário", 
+        "💸 Despesas",
+        "📂 Contabilidade", 
+        "📟 Configurações"
     ])
 else:
     menu = st.sidebar.radio("Navegação", ["🛒 Self-Checkout", "📦 Inventário"])
+
+st.sidebar.divider()
+
+# BOTÃO SAIR (LOGOUT)
+if st.sidebar.button("🚪 SAIR / TROCAR USUÁRIO", use_container_width=True, type="secondary"):
+    # Limpa todas as variáveis de controle de acesso
+    st.session_state.autenticado = False
+    st.session_state.unidade = ""
+    st.session_state.perfil = ""
+    st.session_state.carrinho = [] # Limpa o carrinho por segurança
+    
+    st.toast("Efetuando logout...")
+    time.sleep(1)
+    st.rerun() # Volta para a tela de login (Seção 2)
 
 # ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
 if menu == "📊 Dashboard":
