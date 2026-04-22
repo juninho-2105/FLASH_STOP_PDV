@@ -198,28 +198,75 @@ elif menu == "📈 Custos Fixos":
             conn.update(worksheet="despesas", data=pd.concat([df_d, nova], ignore_index=True)); st.rerun()
     st.dataframe(df_d, use_container_width=True)
 
-# ==================== 7. ENTRADA MERCADORIA ====================
+# ==================== 7. ENTRADA MERCADORIA (COM EDIÇÃO COMPLETA) ====================
 elif menu == "💰 Entrada Mercadoria":
-    st.header("💰 Gestão de Entrada")
+    st.header("💰 Gestão de Entrada e Edição")
     df_p = carregar_dinamico("produtos")
-    sel = st.selectbox("Produto:", ["NOVO"] + df_p['nome'].tolist())
-    with st.form("f_e"):
-        n = st.text_input("Nome") if sel == "NOVO" else sel
-        c_ent, m_ent = st.columns(2)
-        custo = c_ent.number_input("Custo Unit.", min_value=0.0)
-        margem = m_ent.slider("Margem %", 10, 200, 50)
-        qtd = st.number_input("Quantidade", min_value=1)
-        val = st.date_input("Validade")
-        if st.form_submit_button("Gravar"):
-            pv = custo * (1 + margem/100)
-            if sel == "NOVO":
-                n_df = pd.DataFrame([{"nome": n, "estoque": qtd, "preco": pv, "validade": val.strftime("%d/%m/%Y"), "estoque_minimo": 5}])
-                df_p = pd.concat([df_p, n_df], ignore_index=True)
+    
+    # Seletor para escolher entre novo produto ou um existente
+    opcoes_produtos = ["✨ NOVO PRODUTO"] + df_p['nome'].tolist()
+    sel_item = st.selectbox("Selecione o produto para cadastrar ou editar:", opcoes_produtos)
+    
+    with st.form("form_entrada_completa"):
+        if sel_item == "✨ NOVO PRODUTO":
+            nome_p = st.text_input("Nome do Novo Produto:")
+            estoque_atual = 0
+            estoque_min_sugestao = 5
+            preco_sugestao = 0.0
+            validade_sugestao = datetime.now()
+        else:
+            # Puxa os dados atuais do produto para edição
+            dados_atuais = df_p[df_p['nome'] == sel_item].iloc[0]
+            nome_p = st.text_input("Nome do Produto:", value=dados_atuais['nome'])
+            estoque_atual = int(dados_atuais['estoque'])
+            estoque_min_sugestao = int(dados_atuais['estoque_minimo'])
+            preco_sugestao = float(dados_atuais['preco'])
+            try:
+                validade_sugestao = datetime.strptime(str(dados_atuais['validade']), "%d/%m/%Y")
+            except:
+                validade_sugestao = datetime.now()
+
+        c1, c2 = st.columns(2)
+        with c1:
+            qtd_nova = st.number_input("Adicionar ao Estoque:", min_value=0, step=1, value=0, help="Digite quanto está entrando agora.")
+            preco_p = st.number_input("Preço de Venda Unitário (R$):", min_value=0.0, value=preco_sugestao, format="%.2f")
+        
+        with c2:
+            estoque_min_p = st.number_input("Alerta de Estoque Mínimo:", min_value=0, step=1, value=estoque_min_sugestao)
+            validade_p = st.date_input("Data de Validade:", value=validade_sugestao, format="DD/MM/YYYY")
+
+        st.info(f"Estoque atual após salvar: {estoque_atual + qtd_nova}")
+
+        if st.form_submit_button("💾 SALVAR ALTERAÇÕES / ENTRADA"):
+            if not nome_p:
+                st.error("O nome do produto é obrigatório.")
             else:
-                idx = df_p[df_p['nome'] == sel].index[0]
-                df_p.at[idx, 'estoque'] += qtd
-                df_p.at[idx, 'preco'], df_p.at[idx, 'validade'] = pv, val.strftime("%d/%m/%Y")
-            conn.update(worksheet="produtos", data=df_p); st.rerun()
+                with st.spinner("Atualizando base de dados..."):
+                    if sel_item == "✨ NOVO PRODUTO":
+                        # Cria nova linha
+                        novo_p = pd.DataFrame([{
+                            "nome": nome_p,
+                            "estoque": qtd_nova,
+                            "preco": preco_p,
+                            "validade": validade_p.strftime("%d/%m/%Y"),
+                            "estoque_minimo": estoque_min_p
+                        }])
+                        df_atualizado = pd.concat([df_p, novo_p], ignore_index=True)
+                    else:
+                        # Atualiza linha existente
+                        idx = df_p[df_p['nome'] == sel_item].index[0]
+                        df_p.at[idx, 'nome'] = nome_p
+                        df_p.at[idx, 'estoque'] = estoque_atual + qtd_nova
+                        df_p.at[idx, 'preco'] = preco_p
+                        df_p.at[idx, 'validade'] = validade_p.strftime("%d/%m/%Y")
+                        df_p.at[idx, 'estoque_minimo'] = estoque_min_p
+                        df_atualizado = df_p
+
+                    # Salva no Google Sheets
+                    conn.update(worksheet="produtos", data=df_atualizado)
+                    st.success(f"Produto '{nome_p}' atualizado com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
 
 # ==================== 8. INVENTÁRIO ====================
 elif menu == "📦 Inventário":
