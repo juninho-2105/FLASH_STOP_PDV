@@ -419,56 +419,89 @@ elif menu == "💰 Entrada Mercadoria":
     except Exception as e:
         st.error(f"Erro na operação: {e}")
 
-# ==================== 8. INVENTÁRIO ====================
+# ==================== 8. INVENTÁRIO (COM LIMPEZA DE VENCIDOS) ====================
 elif menu == "📦 Inventário":
-    st.header("📦 Gestão de Itens e Alertas")
+    st.header("📦 Gestão de Itens e Saneamento")
     
-    # CORREÇÃO: Chamando a função correta 'carregar_dinamico'
     df_p = carregar_dinamico("produtos")
-    
+    hoje = datetime.now()
+
     if not df_p.empty:
-        # Visualização Geral
-        st.subheader("Estoque Atual")
-        st.dataframe(df_p, use_container_width=True, hide_index=True)
-        
-        st.divider()
-        
-        # Ajuste de Estoque Mínimo (Alerta de Reposição)
-        st.subheader("Configurar Alerta de Estoque Mínimo")
-        st.info("Defina a quantidade mínima para que o produto apareça no alerta do Dashboard.")
-        
-        with st.form("f_inventario"):
-            col_sel, col_qtd = st.columns([2, 1])
-            
-            with col_sel:
-                p_sel = st.selectbox("Selecione o Produto:", df_p['nome'].tolist())
-            
-            with col_qtd:
+        tab_geral, tab_vencidos = st.tabs(["📋 Estoque Geral", "⚠️ Produtos Vencidos"])
+
+        with tab_geral:
+            st.subheader("Configurar Alerta de Estoque Mínimo")
+            with st.form("f_inventario"):
+                col_sel, col_qtd = st.columns([2, 1])
+                p_sel = col_sel.selectbox("Selecione o Produto:", df_p['nome'].tolist())
                 # Busca o valor atual para mostrar como padrão
-                estoque_min_atual = int(df_p[df_p['nome'] == p_sel]['estoque_minimo'].values[0])
-                n_min = st.number_input("Novo Limite Mínimo:", min_value=0, value=estoque_min_atual)
-            
-            if st.form_submit_button("Atualizar Limite de Segurança", use_container_width=True):
-                idx = df_p[df_p['nome'] == p_sel].index[0]
-                df_p.at[idx, 'estoque_minimo'] = n_min
+                val_atual = int(df_p[df_p['nome'] == p_sel]['estoque_minimo'].values[0])
+                n_min = col_qtd.number_input("Novo Limite Mínimo:", min_value=0, value=val_atual)
                 
-                with st.spinner("Salvando alterações..."):
+                if st.form_submit_button("Atualizar Limite de Segurança", use_container_width=True):
+                    idx = df_p[df_p['nome'] == p_sel].index[0]
+                    df_p.at[idx, 'estoque_minimo'] = n_min
                     conn.update(worksheet="produtos", data=df_p)
                     st.cache_data.clear()
-                    st.success(f"Limite de segurança para {p_sel} atualizado com sucesso!")
-                    time.sleep(1)
+                    st.success("Limite atualizado!")
                     st.rerun()
-    else:
-        st.warning("Nenhum produto encontrado na base de dados.")
 
-# ==================== 8. CONTABILIDADE ====================
+            st.divider()
+            st.dataframe(df_p, use_container_width=True, hide_index=True)
+
+        with tab_vencidos:
+            st.subheader("Produtos com Data de Validade Ultrapassada")
+            
+            # Lógica para identificar vencidos
+            vencidos_indices = []
+            for idx, r in df_p.iterrows():
+                try:
+                    dt_val = datetime.strptime(str(r['validade']), "%d/%m/%Y")
+                    if dt_val < hoje:
+                        vencidos_indices.append(idx)
+                except:
+                    continue # Ignora se a data estiver vazia ou em formato errado
+
+            if vencidos_indices:
+                df_vencidos = df_p.loc[vencidos_indices]
+                st.warning(f"Foram encontrados {len(df_vencidos)} produtos vencidos.")
+                st.dataframe(df_vencidos[['nome', 'estoque', 'validade']], use_container_width=True)
+
+                col_exc1, col_exc2 = st.columns(2)
+                
+                if col_exc1.button("🗑️ EXCLUIR TODOS OS VENCIDOS", type="primary", use_container_width=True):
+                    # Remove as linhas do DataFrame
+                    df_p_limpo = df_p.drop(vencidos_indices)
+                    conn.update(worksheet="produtos", data=df_p_limpo)
+                    st.cache_data.clear()
+                    st.success("Todos os produtos vencidos foram removidos do sistema!")
+                    time.sleep(1.5)
+                    st.rerun()
+                
+                with col_exc2:
+                    p_para_excluir = st.selectbox("Excluir item específico:", [""] + df_vencidos['nome'].tolist())
+                    if st.button("Excluir Selecionado"):
+                        if p_para_excluir:
+                            df_p_limpo = df_p[df_p['nome'] != p_para_excluir]
+                            conn.update(worksheet="produtos", data=df_p_limpo)
+                            st.cache_data.clear()
+                            st.success(f"{p_para_excluir} removido!")
+                            time.sleep(1)
+                            st.rerun()
+            else:
+                st.success("Excelente! Não há produtos vencidos no sistema.")
+
+    else:
+        st.warning("Nenhum produto cadastrado.")
+
+# ==================== 9. CONTABILIDADE ====================
 elif menu == "📂 Contabilidade":
     st.header("📂 Relatórios Contábeis")
     df_v = carregar_dinamico("vendas")
     st.download_button("Baixar Relatório de Vendas (CSV)", df_v.to_csv(index=False), "vendas.csv")
     st.dataframe(df_v, use_container_width=True)
 
-# ==================== 9. CONFIGURAÇÕES ====================
+# ==================== 10. CONFIGURAÇÕES ====================
 elif menu == "📟 Configurações":
     st.header("📟 Gestão de PDVs")
     df_pts = carregar_dinamico("pontos")
