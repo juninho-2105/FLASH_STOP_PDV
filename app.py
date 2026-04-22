@@ -501,11 +501,11 @@ elif menu == "📂 Contabilidade":
     st.download_button("Baixar Relatório de Vendas (CSV)", df_v.to_csv(index=False), "vendas.csv")
     st.dataframe(df_v, use_container_width=True)
 
-# ==================== 10. CONFIGURAÇÕES (PDVs E MÁQUINAS) ====================
+# ==================== 10. CONFIGURAÇÕES (PDVs E TAXAS) ====================
 elif menu == "📟 Configurações":
     st.header("📟 Gestão Operacional")
     
-    aba_pdv, aba_maquinas = st.tabs(["📍 Pontos de Venda (PDVs)", "💳 Máquinas de Cartão"])
+    aba_pdv, aba_maquinas = st.tabs(["📍 Pontos de Venda (PDVs)", "💳 Máquinas e Taxas"])
 
     with aba_pdv:
         st.subheader("Gestão de Acessos")
@@ -525,42 +525,41 @@ elif menu == "📟 Configurações":
         st.dataframe(df_pts, use_container_width=True, hide_index=True)
 
     with aba_maquinas:
-        st.subheader("Cadastro de Máquinas de Cartão")
-        st.info("Estas máquinas aparecerão como opção no fechamento do checkout.")
+        st.subheader("Configuração de Operadoras de Pagamento")
+        st.info("As taxas abaixo serão usadas para calcular o lucro líquido real de cada venda.")
         
-        # Carrega dados das máquinas (certifique-se de ter uma aba 'maquinas' no Sheets)
         try:
             df_maq = carregar_dinamico("maquinas")
         except:
-            # Caso a aba não exista, cria um DataFrame vazio com as colunas necessárias
-            df_maq = pd.DataFrame(columns=["nome_maquina", "taxa_padrao", "status"])
+            # Estrutura com taxas separadas
+            df_maq = pd.DataFrame(columns=["maquina", "taxa_pix", "taxa_debito", "taxa_credito"])
 
         with st.form("nova_maquina"):
-            c1, c2 = st.columns(2)
-            nome_m = c1.text_input("Nome/Modelo da Máquina:")
-            taxa_m = c2.number_input("Taxa de Operação (%)", min_value=0.0, max_value=10.0, value=2.99, step=0.01)
-            status_m = st.selectbox("Status Inicial:", ["Ativa", "Manutenção"])
+            nome_m = st.text_input("Nome da Operadora/Máquina (ex: Stone, Mercado Pago):")
             
-            if st.form_submit_button("🚀 CADASTRAR MÁQUINA"):
+            c1, c2, c3 = st.columns(3)
+            t_pix = c1.number_input("Taxa Pix (%)", min_value=0.0, value=0.0, step=0.01)
+            t_deb = c2.number_input("Taxa Débito (%)", min_value=0.0, value=1.99, step=0.01)
+            t_cre = c3.number_input("Taxa Crédito (%)", min_value=0.0, value=3.49, step=0.01)
+            
+            if st.form_submit_button("🚀 SALVAR CONFIGURAÇÃO DE TAXAS"):
                 if nome_m:
-                    nova_maq = pd.DataFrame([{
-                        "nome_maquina": nome_m, 
-                        "taxa_padrao": taxa_m, 
-                        "status": status_m
+                    nova_config = pd.DataFrame([{
+                        "maquina": nome_m, 
+                        "taxa_pix": t_pix, 
+                        "taxa_debito": t_deb, 
+                        "taxa_credito": t_cre
                     }])
-                    df_maq_final = pd.concat([df_maq, nova_maq], ignore_index=True)
+                    # Atualiza ou adiciona
+                    df_maq_final = pd.concat([df_maq, nova_config], ignore_index=True)
                     conn.update(worksheet="maquinas", data=df_maq_final)
                     st.cache_data.clear()
-                    st.success(f"Máquina {nome_m} integrada ao sistema!")
+                    st.success(f"Taxas da {nome_m} configuradas!")
                     time.sleep(1)
                     st.rerun()
 
         if not df_maq.empty:
             st.divider()
-            st.write("### Máquinas Configuradas")
+            st.write("### Taxas Ativas")
+            # Exibe com formatação de porcentagem
             st.dataframe(df_maq, use_container_width=True, hide_index=True)
-            
-            if st.button("🗑️ Limpar Todas as Máquinas"):
-                conn.update(worksheet="maquinas", data=pd.DataFrame(columns=["nome_maquina", "taxa_padrao", "status"]))
-                st.cache_data.clear()
-                st.rerun()
