@@ -175,3 +175,61 @@ elif menu == "📦 Inventário":
             df_prod.at[idx_a, 'estoque_minimo'] = limite_n
             conn.update(worksheet="produtos", data=df_prod)
             st.success("Limite salvo!"); st.rerun()
+
+# ==================== 9. CONTABILIDADE (REVISADO) ====================
+elif menu == "📂 Contabilidade":
+    st.header("📂 Histórico de Vendas")
+    df_vendas = carregar("vendas")
+    if not df_vendas.empty:
+        st.dataframe(df_vendas, use_container_width=True)
+        csv_data = df_vendas.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 Baixar Relatório CSV",
+            data=csv_data,
+            file_name="vendas_flash_stop.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("Nenhuma venda registrada até o momento.")
+
+# ==================== 10. CONFIGURAÇÕES (REVISADO) ====================
+elif menu == "📟 Configurações":
+    st.header("📟 Unidades e Máquinas")
+    df_pts, df_maqs = carregar("pontos"), carregar("maquinas")
+    tab_unidade, tab_maquina = st.tabs(["PDVs", "Maquininhas"])
+    
+    with tab_unidade:
+        with st.form("form_pdv"):
+            nome_pdv = st.text_input("Nome da Unidade:")
+            senha_pdv = st.text_input("Senha do Tablet:", type="password")
+            if st.form_submit_button("Cadastrar PDV"):
+                if nome_pdv and senha_pdv:
+                    novo_p = pd.DataFrame([{"nome": nome_pdv, "senha": senha_pdv}])
+                    conn.update(worksheet="pontos", data=pd.concat([df_pts, novo_p], ignore_index=True))
+                    st.success("PDV Criado com sucesso!"); st.rerun()
+                else:
+                    st.warning("Preencha todos os campos.")
+        st.subheader("PDVs Ativos")
+        st.dataframe(df_pts, use_container_width=True, hide_index=True)
+        
+    with tab_maquina:
+        with st.form("form_maq"):
+            m_nome_cad = st.text_input("Identificação da Máquina (Ex: Moderninha 01):")
+            m_vinculo = st.selectbox("Vincular ao PDV:", df_pts['nome'].tolist() if not df_pts.empty else ["Nenhum"])
+            c_tx1, c_tx2, c_tx3 = st.columns(3)
+            tx_p = c_tx1.number_input("Pix %", min_value=0.0, step=0.01)
+            tx_d = c_tx2.number_input("Débito %", min_value=0.0, step=0.01)
+            tx_c = c_tx3.number_input("Crédito %", min_value=0.0, step=0.01)
+            if st.form_submit_button("Cadastrar Máquina"):
+                if m_nome_cad:
+                    nova_m = pd.DataFrame([{
+                        "nome_maquina": m_nome_cad, 
+                        "pdv_vinculado": m_vinculo, 
+                        "taxa_debito": tx_d, 
+                        "taxa_credito": tx_c, 
+                        "taxa_pix": tx_p
+                    }])
+                    conn.update(worksheet="maquinas", data=pd.concat([df_maqs, nova_m], ignore_index=True))
+                    st.success("Máquina vinculada!"); st.rerun()
+        st.subheader("Máquinas Configuradas")
+        st.dataframe(df_maqs, use_container_width=True, hide_index=True)
