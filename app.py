@@ -157,26 +157,91 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT ====================
+# ==================== 5. SELF-CHECKOUT (ESTRUTURA COMPLETA) ====================
 elif menu == "🛒 Self-Checkout":
-    # 1. LOGO CENTRALIZADO (Apenas nesta página)
-    # Crie colunas para centralizar a imagem no meio da tela
-    col_logo_1, col_logo_2, col_logo_3 = st.columns([1, 2, 1])
     
-    with col_logo_2:
-        # Substitua 'logo.png' pelo caminho do seu arquivo ou URL da imagem
-        # use_container_width garante que ele se ajuste ao tablet
+    # 1. EXIBIÇÃO DO LOGO NO TOPO
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
         try:
+            # Tenta carregar a imagem. Se não achar, usa o texto estilizado.
             st.image("logo_flash_stop.png", use_container_width=True)
         except:
-            # Caso a imagem ainda não esteja na pasta, exibe o nome estilizado
-            st.markdown("<h1 style='text-align: center; color: #2e7d32;'>FLASH STOP</h1>", unsafe_allow_html=True)
-
-    st.markdown("<h4 style='text-align: center; opacity: 0.7;'>Mini Mercado Inteligente</h4>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align: center; color: #2e7d32; margin-bottom:0;'>FLASH STOP</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; opacity: 0.6;'>Mini Mercado Inteligente</p>", unsafe_allow_html=True)
+    
     st.divider()
 
-    # --- RESTO DO CÓDIGO DO CHECKOUT (BUSCA E CARRINHO EMBAIXO) ---
-    # (Mantenha a estrutura de colunas que fizemos anteriormente aqui)
+    # 2. ÁREA DE BUSCA E SCANNER
+    # Definimos as colunas para a parte de seleção de produtos
+    col_busca, col_card = st.columns([1.5, 1])
+    
+    df_p = carregar_dinamico("produtos")
+    
+    with col_busca:
+        st.subheader("🔍 Localizar Produto")
+        # O selectbox precisa de uma lista válida. Se o DF estiver vazio, cria lista vazia.
+        lista_produtos = [""] + df_p['nome'].tolist() if not df_p.empty else [""]
+        p_nome = st.selectbox("Selecione ou use o leitor:", lista_produtos)
+
+    # Se um produto for selecionado, mostra o card de confirmação
+    if p_nome and p_nome != "":
+        dados_p = df_p[df_p['nome'] == p_nome].iloc[0]
+        preco_unit = float(dados_p['preco_venda'])
+        
+        with col_card:
+            st.markdown(f"""
+                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #dcdfe3;">
+                    <p style="margin:0; font-size: 14px;">Preço Unitário</p>
+                    <h2 style="margin:0; color: #2e7d32;">R$ {preco_unit:.2f}</h2>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("➕ ADICIONAR", use_container_width=True, type="primary"):
+                st.session_state.carrinho.append({
+                    "id": len(st.session_state.carrinho) + 1,
+                    "produto": p_nome,
+                    "preco": preco_unit
+                })
+                st.toast(f"{p_nome} adicionado!")
+                time.sleep(0.5)
+                st.rerun()
+
+    st.write("") # Espaçador visual
+    st.divider()
+
+    # 3. ÁREA DO CARRINHO (ESTRUTURA INFERIOR)
+    st.subheader("📋 Sua Cesta")
+    
+    if st.session_state.carrinho:
+        df_cart = pd.DataFrame(st.session_state.carrinho)
+        v_total = df_cart['preco'].sum()
+
+        # Exibe a tabela do carrinho
+        st.dataframe(df_cart[['produto', 'preco']], use_container_width=True, hide_index=True)
+        
+        # Rodapé com Total e Pagamento
+        c_tot, c_pag = st.columns([1, 1])
+        
+        with c_tot:
+            st.metric("TOTAL A PAGAR", f"R$ {v_total:.2f}")
+            if st.button("🗑️ Limpar Tudo", use_container_width=True):
+                st.session_state.carrinho = []
+                st.rerun()
+        
+        with c_pag:
+            forma_pag = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+            if st.button("🚀 FINALIZAR COMPRA", use_container_width=True, type="primary"):
+                # Aqui você chama sua função de salvar venda
+                st.success("Pagamento Confirmado!")
+                st.session_state.carrinho = []
+                time.sleep(2)
+                st.rerun()
+    else:
+        st.info("O carrinho está vazio. Busque um produto acima para começar.")
+
+
+
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
 elif menu == "💸 Despesas":
     st.header("💸 Registro de Custos e Despesas")
