@@ -314,16 +314,58 @@ elif menu == "📦 Inventário":
 
     st.markdown("<p style='font-size: 12px; color: gray;'>Dica: Use esta função para registrar perdas, quebras ou produtos que passaram da validade e precisam sair do inventário físico.</p>", unsafe_allow_html=True)
 
-# ==================== 9. CONTABILIDADE ====================
+# ==================== 9. CONTABILIDADE (REVISADO E PERSISTENTE) ====================
 elif menu == "📂 Contabilidade":
-    st.header("📂 Relatório Contábil")
-    df_v, df_pts = carregar_dinamico("vendas"), carregar_estatico("pontos")
-    if not df_v.empty:
-        f_pdv = st.selectbox("Filtrar por Unidade:", ["Todos"] + df_pts['nome'].tolist())
-        df_f = df_v if f_pdv == "Todos" else df_v[df_v['pdv'] == f_pdv]
-        st.dataframe(df_f, use_container_width=True)
-        st.download_button("📥 Exportar para Contador", data=df_f.to_csv(index=False).encode('utf-8-sig'), file_name=f"contabilidade_{f_pdv}.csv")
+    st.header("📂 Relatório Contábil e Exportação")
+    
+    # Carrega os dados sempre atualizados
+    df_v = carregar_dinamico("vendas")
+    df_pts = carregar_estatico("pontos")
 
+    # Seletor de Filtro (Fica sempre visível)
+    lista_pdvs = ["Todos"] + df_pts['nome'].tolist()
+    f_pdv = st.selectbox("Filtrar relatório por Unidade (PDV):", lista_pdvs)
+
+    if df_v.empty:
+        st.info(f"💡 A aba de vendas está vazia no Google Sheets. Realize uma venda no Self-Checkout para gerar dados.")
+        
+        # Opcional: Criar um botão para visualizar como seria o relatório (apenas visual)
+        if st.checkbox("Visualizar exemplo de relatório"):
+            exemplo = pd.DataFrame([{"data": "01/01/2026 10:00", "pdv": "Exemplo", "produto": "Item Teste", "valor_bruto": 10.0, "valor_liquido": 9.5, "forma": "Pix"}])
+            st.dataframe(exemplo, use_container_width=True)
+    else:
+        # Aplica o filtro de PDV
+        df_f = df_v if f_pdv == "Todos" else df_v[df_v['pdv'] == f_pdv]
+
+        if df_f.empty:
+            st.warning(f"Nenhum registro encontrado para a unidade: {f_pdv}")
+        else:
+            # Exibe Métricas do que foi filtrado
+            c1, c2 = st.columns(2)
+            c1.metric("Bruto (Filtrado)", f"R$ {pd.to_numeric(df_f['valor_bruto']).sum():,.2f}")
+            c2.metric("Líquido (Filtrado)", f"R$ {pd.to_numeric(df_f['valor_liquido']).sum():,.2f}")
+
+            # Tabela de Dados
+            st.dataframe(df_f, use_container_width=True, hide_index=True)
+
+            st.divider()
+
+            # Botões de Ação
+            col_btn1, col_btn2 = st.columns(2)
+            
+            with col_btn1:
+                csv = df_f.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(
+                    label="📤 EXPORTAR PARA CONTADOR (CSV)",
+                    data=csv,
+                    file_name=f"contabil_{f_pdv}_{datetime.now().strftime('%m_%Y')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with col_btn2:
+                if st.button("🖨️ PREPARAR PARA IMPRIMIR", use_container_width=True):
+                    st.toast("Use Ctrl+P para imprimir a tela agora!", icon="🖨️")
 # ==================== 10. CONFIGURAÇÕES ====================
 elif menu == "📟 Configurações":
     st.header("📟 Gerenciar Unidades")
