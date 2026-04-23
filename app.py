@@ -247,7 +247,7 @@ df_p.columns = df_p.columns.str.strip() # Limpeza de colunas
     
 st.write("")
     # Campo de seleção configurado para focar o leitor
-    p_nome = st.selectbox("Aguardando bip ou seleção...", [""] + df_p['nome'].tolist(), key="scanner_input")
+p_nome = st.selectbox("Aguardando bip ou seleção...", [""] + df_p['nome'].tolist(), key="scanner_input")
 
     if p_nome:
         dados_p = df_p[df_p['nome'] == p_nome].iloc[0]
