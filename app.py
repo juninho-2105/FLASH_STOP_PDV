@@ -401,67 +401,112 @@ elif menu == "💰 Entrada Mercadoria":
                 else:
                     st.error("O nome do produto é obrigatório.")
 
-# --- INVENTÁRIO COM FORMATAÇÃO DE MOEDA ---
+# ==================== ABA: INVENTÁRIO (VERSÃO INTEGRADA) ====================
 elif menu == "📦 Inventário":
-    st.header("📦 Gestão de Inventário")
+    st.header("📦 Gestão de Estoque e Produtos")
     
+    # Carregamento dos dados
     df_p = carregar_dinamico("produtos")
     
-    if not df_p.empty:
-        # 1. TRATAMENTO DE DADOS
-        # Garante que as colunas sejam numéricas para não dar erro na formatação
+    if df_p is not None and not df_p.empty:
+        # --- 1. TRATAMENTO E SANITIZAÇÃO DE DADOS ---
         col_venda = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
-        df_p[col_venda] = pd.to_numeric(df_p[col_venda], errors='coerce').fillna(0.0)
+        
+        # Converte para numérico para garantir cálculos e formatação
+        df_p[col_venda] = pd.to_numeric(df_p[col_venda].astype(str).str.replace(',', '.'), errors='coerce').fillna(0.0)
         df_p['estoque'] = pd.to_numeric(df_p['estoque'], errors='coerce').fillna(0)
-        df_p['estoque_minimo'] = pd.to_numeric(df_p.get('estoque_minimo', 5), errors='coerce').fillna(5)
+        
+        # Garante que a coluna de estoque mínimo exista
+        if 'estoque_minimo' not in df_p.columns:
+            df_p['estoque_minimo'] = 5
+        else:
+            df_p['estoque_minimo'] = pd.to_numeric(df_p['estoque_minimo'], errors='coerce').fillna(5)
 
-        # 2. VISUALIZAÇÃO COM FORMATAÇÃO DE MOEDA
-        st.subheader("Estoque e Preços")
+        # --- 2. VISUALIZAÇÃO COM FORMATAÇÃO DE MOEDA ---
+        st.subheader("📋 Lista de Produtos Atuais")
         
-        # Criamos um DataFrame formatado apenas para exibição
-        df_visualizacao = df_p.copy()
-        
-        # Aplicando a máscara de Real (R$) na visualização
+        # Estilização: Linhas em vermelho se o estoque for menor ou igual ao mínimo
+        def destacar_estoque_baixo(s):
+            is_low = s['estoque'] <= s['estoque_minimo']
+            return ['background-color: #ffcccc' if is_low else '' for _ in s]
+
         st.dataframe(
-            df_visualizacao.style.format({
+            df_p.style.format({
                 col_venda: "R$ {:,.2f}",
                 "estoque": "{:.0f}",
                 "estoque_minimo": "{:.0f}"
-            }).apply(lambda x: ['background-color: #ffcccc' if (isinstance(v, (int, float)) and x['estoque'] <= x['estoque_minimo']) else '' for v in x], axis=1),
+            }).apply(destacar_estoque_baixo, axis=1),
             use_container_width=True,
             hide_index=True
         )
+        
+        st.caption("💡 Linhas em vermelho indicam que o produto atingiu o nível crítico definido.")
 
         st.divider()
 
-        # 3. EDIÇÃO DE PRODUTO (Mantendo a lógica de ajuste)
-        st.subheader("✏️ Ajustar Produto")
-        p_ajuste = st.selectbox("Selecione o produto:", [""] + df_p['nome'].tolist())
+        # --- 3. EDIÇÃO DE PRODUTO (PREÇO E ESTOQUE) ---
+        st.subheader("✏️ Atualizar Produto")
+        p_escolhido = st.selectbox("Selecione o produto para editar:", [""] + df_p['nome'].tolist())
         
-        if p_ajuste:
-            dados_atuais = df_p[df_p['nome'] == p_ajuste].iloc[0]
+        if p_escolhido:
+            item_atual = df_p[df_p['nome'] == p_escolhido].iloc[0]
             
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                novo_preco = st.number_input("Preço de Venda (R$):", value=float(dados_atuais[col_venda]), step=0.50, format="%.2f")
-            with c2:
-                nova_qtd = st.number_input("Estoque Atual:", value=int(dados_atuais['estoque']), step=1)
-            with c3:
-                novo_min = st.number_input("Mínimo para Alerta:", value=int(dados_atuais['estoque_minimo']), step=1)
-
-            if st.button("Salvar Alterações", use_container_width=True, type="primary"):
-                idx = df_p[df_p['nome'] == p_ajuste].index[0]
-                df_p.at[idx, col_venda] = novo_preco
-                df_p.at[idx, 'estoque'] = nova_qtd
-                df_p.at[idx, 'estoque_minimo'] = novo_min
+            with st.form("form_edicao"):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    novo_preco = st.number_input("Preço de Venda (R$):", value=float(item_atual[col_venda]), step=0.01, format="%.2f")
+                with c2:
+                    nova_qtd = st.number_input("Quantidade em Estoque:", value=int(item_atual['estoque']), step=1)
+                with c3:
+                    novo_minimo = st.number_input("Aviso de Estoque Mínimo:", value=int(item_atual['estoque_minimo']), step=1)
                 
-                conn.update(worksheet="produtos", data=df_p)
-                st.cache_data.clear()
-                st.success(f"Dados de {p_ajuste} atualizados!")
-                time.sleep(1)
-                st.rerun()
+                if st.form_submit_button("✅ SALVAR ALTERAÇÕES", use_container_width=True):
+                    idx = df_p[df_p['nome'] == p_escolhido].index[0]
+                    df_p.at[idx, col_venda] = novo_preco
+                    df_p.at[idx, 'estoque'] = nova_qtd
+                    df_p.at[idx, 'estoque_minimo'] = novo_minimo
+                    
+                    conn.update(worksheet="produtos", data=df_p)
+                    st.cache_data.clear()
+                    st.success(f"Dados de '{p_escolhido}' atualizados com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
+
+        st.divider()
+
+        # --- 4. LIMPEZA DE CATÁLOGO (REMOVER PRODUTOS) ---
+        st.subheader("🗑️ Limpeza de Catálogo")
+        with st.expander("Excluir produtos (Vencidos ou Descontinuados)"):
+            st.info("Use esta opção para remover permanentemente um item do seu inventário.")
+            
+            # Identificação de motivos para exclusão
+            hoje = datetime.now()
+            opcoes_del = []
+            for _, r in df_p.iterrows():
+                motivo = ""
+                if 'validade' in df_p.columns:
+                    v_dt = pd.to_datetime(r['validade'], dayfirst=True, errors='coerce')
+                    if pd.notnull(v_dt) and v_dt < hoje:
+                        motivo += " [VENCIDO]"
+                if r['estoque'] <= 0:
+                    motivo += " [SEM ESTOQUE]"
+                
+                opcoes_del.append(f"{r['nome']}{motivo}")
+
+            p_del = st.selectbox("Escolha o item para remover:", [""] + opcoes_del, key="del_box")
+
+            if st.button("🗑️ EXCLUIR DEFINITIVAMENTE", type="primary", use_container_width=True):
+                if p_del != "":
+                    nome_real = p_del.split(" [")[0] # Pega o nome antes do aviso
+                    df_p = df_p[df_p['nome'] != nome_real]
+                    
+                    conn.update(worksheet="produtos", data=df_p)
+                    st.cache_data.clear()
+                    st.error(f"Produto '{nome_real}' removido do sistema.")
+                    time.sleep(1.5)
+                    st.rerun()
     else:
-        st.info("Nenhum produto para exibir.")
+        st.warning("Nenhum dado encontrado na aba 'produtos' da sua planilha.")
         
 # --- GESTÃO DE DESPESAS ---
 elif menu == "💸 Despesas":
