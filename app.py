@@ -197,22 +197,32 @@ if menu == "📊 Dashboard":
             st.success("Nenhum produto próximo ao vencimento!")
 
 # ==================== 5. SELF-CHECKOUT OTIMIZADO ====================
-elif menu == "🛒 Self-Checkout":
-    # CSS para botões menores e compactos
-    st.markdown("""
-        <style>
-        .stButton>button {
-            border-radius: 8px;
-            height: 35px; /* Botões mais baixos */
-            font-size: 14px;
-            padding: 0px;
-        }
-        .btn-qtd {
-            font-weight: bold;
-            font-size: 18px !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+st.markdown(f"""
+    <style>
+    /* Cor de fundo e texto principal */
+    .stApp {{
+        background-color: #000000;
+        color: #FFFFFF;
+    }}
+    /* Botões com a cor verde do logo */
+    .stButton>button {{
+        background-color: #76D72B;
+        color: #000000;
+        border-radius: 8px;
+        font-weight: bold;
+        border: none;
+    }}
+    .stButton>button:hover {{
+        background-color: #5eb022;
+        color: #FFFFFF;
+    }}
+    /* Inputs e Selectboxes */
+    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {{
+        background-color: #1E1E1E;
+        color: #FFFFFF;
+    }}
+    </style>
+""", unsafe_allow_html=True)
 
     # 1. LOGO COMPACTO
     col_l1, col_l2, col_l3 = st.columns([1.5, 1, 1.5])
