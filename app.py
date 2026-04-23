@@ -270,8 +270,7 @@ if p_nome:
                 st.toast("Adicionado!")
                 time.sleep(0.4)
                 st.rerun()
-
-    st.divider()
+st.divider()
 
     # 3. CARRINHO COMPACTO (PARA CELULAR/MÁQUINA DE CARTÃO)
     if st.session_state.carrinho:
