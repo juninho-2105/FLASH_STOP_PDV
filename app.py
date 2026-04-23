@@ -169,57 +169,94 @@ if menu == "📊 Dashboard":
     else:
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
-# --- SELF-CHECKOUT ---
+# --- SELF-CHECKOUT PERSONALIZADO ---
 elif menu == "🛒 Self-Checkout":
-    st.header("🛒 Checkout")
+    # Título da Marca no Topo
+    st.markdown("<h1 style='text-align: center; color: #FFD700;'>⚡ Flash Stop</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Terminal de Autoatendimento</h3>", unsafe_allow_html=True)
+    
     df_p = carregar_dinamico("produtos")
     
     if not df_p.empty:
-        p_nome = st.selectbox("Bipar ou Selecionar Produto:", [""] + df_p['nome'].tolist())
-        if p_nome:
-            dados_p = df_p[df_p['nome'] == p_nome].iloc[0]
-            preco_unit = float(dados_p['preco'])
-            if st.button(f"Adicionar {p_nome} - R$ {preco_unit:.2f}", use_container_width=True):
-                st.session_state.carrinho.append({"produto": p_nome, "preco": preco_unit})
-                st.toast(f"{p_nome} adicionado!")
-                time.sleep(0.3)
-                st.rerun()
+        # Campo de entrada para o leitor de código de barras ou seleção manual
+        p_entrada = st.selectbox("Passe o produto no leitor ou selecione:", 
+                                 [""] + df_p['nome'].tolist(), 
+                                 key="entrada_bip")
+
+        if p_entrada:
+            item_dados = df_p[df_p['nome'] == p_entrada].iloc[0]
+            st.session_state.carrinho.append({
+                "produto": item_dados['nome'], 
+                "preco": float(item_dados['preco']),
+                "unidade": st.session_state.unidade
+            })
+            st.toast(f"✅ {p_entrada} adicionado!", icon="🛒")
+            time.sleep(0.5)
+            st.rerun()
 
         st.divider()
+
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
             resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
 
-            for idx, item in resumo.iterrows():
-                col_txt, col_btns = st.columns([3, 1])
-                with col_txt:
-                    st.markdown(f"**{item['qtd']}x** {item['produto']} | R$ {item['preco']*item['qtd']:.2f}")
-                with col_btns:
-                    m1, m2 = st.columns(2)
-                    if m1.button("—", key=f"sub_{idx}"):
-                        for i, p in enumerate(st.session_state.carrinho):
-                            if p['produto'] == item['produto']:
-                                st.session_state.carrinho.pop(i)
-                                break
-                        st.rerun()
-                    if m2.button("+", key=f"add_{idx}"):
-                        st.session_state.carrinho.append({"produto": item['produto'], "preco": item['preco']})
-                        st.rerun()
+            for idx, row in resumo.iterrows():
+                c_item, c_sub, c_add = st.columns([4, 1, 1])
+                c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f}/un)")
+                
+                if c_sub.button("—", key=f"btn_sub_{idx}"):
+                    for i, p in enumerate(st.session_state.carrinho):
+                        if p['produto'] == row['produto']:
+                            st.session_state.carrinho.pop(i)
+                            break
+                    st.rerun()
+                if c_add.button("+", key=f"btn_add_{idx}"):
+                    st.session_state.carrinho.append({"produto": row['produto'], "preco": row['preco'], "unidade": st.session_state.unidade})
+                    st.rerun()
 
-            total = df_cart['preco'].sum()
-            st.subheader(f"Total: R$ {total:.2f}")
-            forma_pgto = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+            total_venda = df_cart['preco'].sum()
+            st.markdown(f"<h2 style='text-align: center;'>Total: R$ {total_venda:.2f}</h2>", unsafe_allow_html=True)
             
-            c_f1, c_f2 = st.columns(2)
-            if c_f1.button("❌ CANCELAR", use_container_width=True):
-                st.session_state.carrinho = []
-                st.rerun()
-            if c_f2.button("🚀 PAGAR", use_container_width=True, type="primary"):
-                st.success("Venda Finalizada!")
-                st.session_state.carrinho = []
-                time.sleep(1)
-                st.rerun()
-    else: st.warning("Nenhum produto cadastrado.")
+            forma = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+
+            # Centralização dos botões empilhados
+            st.write("") # Espaçador
+            col_central, _ = st.columns([2, 1]) # Gambiarra leve para centralização ou use CSS
+            
+            # Usando CSS para garantir que os botões ocupem a largura e fiquem um sobre o outro
+            with st.container():
+                # Botão Finalizar Compra (Topo)
+                if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
+                    # Lógica de salvamento...
+                    nova_venda = pd.DataFrame([{
+                        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "unidade": st.session_state.unidade,
+                        "valor_bruto": total_venda,
+                        "valor_liquido": total_venda * 0.97,
+                        "forma_pgto": forma
+                    }])
+                    
+                    for item in st.session_state.carrinho:
+                        idx_p = df_p[df_p['nome'] == item['produto']].index[0]
+                        df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
+
+                    conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), nova_venda], ignore_index=True))
+                    conn.update(worksheet="produtos", data=df_p)
+                    
+                    st.session_state.carrinho = []
+                    st.success("Compra Finalizada com Sucesso!")
+                    st.balloons()
+                    time.sleep(2)
+                    st.rerun()
+                
+                # Botão Cancelar Compra (Baixo)
+                if st.button("❌ CANCELAR COMPRA", use_container_width=True):
+                    st.session_state.carrinho = []
+                    st.rerun()
+        else:
+            st.info("Aguardando bipagem de produtos...")
+    else:
+        st.warning("Cadastre produtos no inventário antes de abrir o checkout.")
 
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
