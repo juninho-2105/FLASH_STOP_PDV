@@ -261,7 +261,7 @@ elif menu == "🛒 Self-Checkout":
 
     st.divider()
 
-    # 3. LISTAGEM DO CARRINHO
+   # 3. LISTAGEM DO CARRINHO
     if st.session_state.carrinho:
         df_cart = pd.DataFrame(st.session_state.carrinho)
         resumo = df_cart.groupby('produto').agg({'preco': 'first', 'id': 'count'}).rename(columns={'id': 'qtd'}).reset_index()
@@ -276,16 +276,48 @@ elif menu == "🛒 Self-Checkout":
             
             # Botões de ajuste (+ e -) abaixo do card
             q1, q2, q3, q_esp = st.columns([1, 1, 1, 4])
+            
             if q1.button("—", key=f"m_{idx}"):
                 for i, p in enumerate(st.session_state.carrinho):
                     if p['produto'] == item['produto']:
                         st.session_state.carrinho.pop(i)
                         break
                 st.rerun()
+                
             q2.markdown(f"<p style='text-align:center; font-size:18px; margin-top:5px;'>{item['qtd']}</p>", unsafe_allow_html=True)
+            
             if q3.button("＋", key=f"p_{idx}"):
-                st.session_state.carrinho.append({"id": time.time(), "produto": item['produto'],
+                # LINHA CORRIGIDA ABAIXO:
+                st.session_state.carrinho.append({"id": time.time(), "produto": item['produto'], "preco": item['preco']})
+                st.rerun()
 
+        # 4. PAGAMENTO E FINALIZAÇÃO (RODAPÉ)
+        st.divider()
+        v_total = df_cart['preco'].sum()
+        st.markdown(f"<h1 style='text-align:center; margin:0;'>Total: R$ {v_total:.2f}</h1>", unsafe_allow_html=True)
+        
+        st.write("")
+        st.markdown("<p style='text-align:center; margin-bottom:5px;'>Selecione a forma de pagamento:</p>", unsafe_allow_html=True)
+        forma_pgto = st.radio("Pagamento", ["Pix", "Débito", "Crédito"], horizontal=True, label_visibility="collapsed")
+        
+        st.write("") # Espaço extra
+        
+        # Botões de ação final centralizados e empilhados
+        if st.button("🚀 FINALIZAR COMPRA", type="primary", key="btn_finalizar"):
+            st.success(f"Pagamento via {forma_pgto} confirmado!")
+            st.balloons()
+            st.session_state.carrinho = []
+            time.sleep(2)
+            st.rerun()
+            
+        if st.button("❌ CANCELAR COMPRA", key="btn_cancelar"):
+            st.session_state.carrinho = []
+            st.warning("Compra cancelada.")
+            time.sleep(1)
+            st.rerun()
+            
+    else:
+        st.info("Aguardando seleção de produtos para iniciar a compra.")
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
 elif menu == "💸 Despesas":
     st.header("💸 Registro de Custos e Despesas")
