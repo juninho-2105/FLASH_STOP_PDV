@@ -23,35 +23,45 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def carregar_dinamico(aba):
     return conn.read(worksheet=aba, ttl=0)
 
-# ==================== 2. SISTEMA DE LOGIN ====================
+# ==================== 2. SISTEMA DE LOGIN OTIMIZADO ====================
 if not st.session_state.autenticado:
-    try:
-        auto_user = st.secrets.get("AUTO_LOGIN_USER")
-        auto_pass = st.secrets.get("AUTO_LOGIN_PASS")
+    st.title("⚡ Flash Stop - Acesso Restrito")
+    
+    with st.container():
+        user = st.text_input("Usuário", placeholder="Digite seu usuário")
+        senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
         
-        if auto_user and auto_pass:
-            df_pts = carregar_dinamico("pontos")
-            if auto_user in df_pts['nome'].values:
-                senha_correta = str(df_pts[df_pts['nome'] == auto_user]['senha'].values[0])
-                if auto_pass == senha_correta:
-                    st.session_state.autenticado = True
-                    st.session_state.unidade = auto_user
-                    st.session_state.perfil = "pdv"
-                    st.rerun()
-    except:
-        pass 
-
-    # Formulário de Login (Simplificado para o exemplo)
-    st.title("Login Flash Stop")
-    user = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
-        if user == "admin" and senha == "admin": # Exemplo
-            st.session_state.autenticado = True
-            st.session_state.perfil = "admin"
-            st.session_state.unidade = "Central"
-            st.rerun()
-    st.stop()
+        if st.button("Entrar", use_container_width=True):
+            # 1. Verificação para Admin (Exemplo manual)
+            if user == "admin" and senha == "1234": # Altere para sua senha real
+                st.session_state.autenticado = True
+                st.session_state.unidade = "Central"
+                st.session_state.perfil = "admin"
+                st.success("Login realizado com sucesso!")
+                time.sleep(0.5)
+                st.rerun()  # <--- ESSENCIAL PARA O BOTÃO FUNCIONAR
+            
+            # 2. Verificação via Planilha (Para PDVs)
+            else:
+                try:
+                    df_pts = carregar_dinamico("pontos")
+                    if user in df_pts['nome'].values:
+                        senha_correta = str(df_pts[df_pts['nome'] == user]['senha'].values[0])
+                        if senha == senha_correta:
+                            st.session_state.autenticado = True
+                            st.session_state.unidade = user
+                            st.session_state.perfil = "pdv"
+                            st.success(f"Bem-vindo, {user}!")
+                            time.sleep(0.5)
+                            st.rerun() # <--- ESSENCIAL PARA O BOTÃO FUNCIONAR
+                        else:
+                            st.error("Senha incorreta.")
+                    else:
+                        st.error("Usuário não encontrado.")
+                except Exception as e:
+                    st.error(f"Erro ao conectar com a base de dados: {e}")
+    
+    st.stop() # Interrompe o código aqui enquanto não estiver logado
 
 # ==================== 3. DEFINIÇÃO DO MENU ====================
 st.sidebar.title("⚡ Flash Stop")
