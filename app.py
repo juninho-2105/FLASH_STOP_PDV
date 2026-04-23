@@ -23,35 +23,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def carregar_dinamico(aba):
     return conn.read(worksheet=aba, ttl=0)
 
-# ==================== 2. SISTEMA DE LOGIN OTIMIZADO ====================
-if not st.session_state.autenticado:
-    st.title("⚡ Flash Stop - Acesso Restrito")
-    
-    with st.container():import streamlit as st
-import pandas as pd
-from streamlit_gsheets import GSheetsConnection
-from datetime import datetime, timedelta
-import time
-
-# ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
-st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
-
-# Inicialização de Estados de Sessão
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-if 'carrinho' not in st.session_state:
-    st.session_state.carrinho = []
-if 'unidade' not in st.session_state:
-    st.session_state.unidade = ""
-if 'perfil' not in st.session_state:
-    st.session_state.perfil = ""
-
-# Conexão com Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-def carregar_dinamico(aba):
-    return conn.read(worksheet=aba, ttl=0)
-
 # ==================== 2. SISTEMA DE LOGIN ====================
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
