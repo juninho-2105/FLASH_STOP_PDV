@@ -117,4 +117,107 @@ elif menu == "🛒 Self-Checkout":
         st.divider()
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
-            resumo = df_cart.groupby('produto').agg({'
+            resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
+
+            for idx, item in resumo.iterrows():
+                col_txt, col_btns = st.columns([3, 1])
+                with col_txt:
+                    st.markdown(f"**{item['qtd']}x** {item['produto']} | R$ {item['preco']*item['qtd']:.2f}")
+                with col_btns:
+                    m1, m2 = st.columns(2)
+                    if m1.button("—", key=f"sub_{idx}"):
+                        for i, p in enumerate(st.session_state.carrinho):
+                            if p['produto'] == item['produto']:
+                                st.session_state.carrinho.pop(i)
+                                break
+                        st.rerun()
+                    if m2.button("+", key=f"add_{idx}"):
+                        st.session_state.carrinho.append({"produto": item['produto'], "preco": item['preco']})
+                        st.rerun()
+
+            total = df_cart['preco'].sum()
+            st.subheader(f"Total: R$ {total:.2f}")
+            forma_pgto = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+            
+            c_f1, c_f2 = st.columns(2)
+            if c_f1.button("❌ CANCELAR", use_container_width=True):
+                st.session_state.carrinho = []
+                st.rerun()
+            if c_f2.button("🚀 PAGAR", use_container_width=True, type="primary"):
+                st.success("Venda Finalizada!")
+                st.session_state.carrinho = []
+                time.sleep(1)
+                st.rerun()
+    else: st.warning("Nenhum produto cadastrado.")
+
+# --- ENTRADA DE MERCADORIA ---
+elif menu == "💰 Entrada Mercadoria":
+    st.header("💰 Gestão de Estoque")
+    df_p = carregar_dinamico("produtos")
+    
+    if not df_p.empty:
+        prod_sel = st.selectbox("Selecione o Produto:", df_p['nome'].tolist())
+        with st.form("entrada_estoque"):
+            c1, c2, c3 = st.columns(3)
+            qtd = c1.number_input("Quantidade Chegando:", min_value=1)
+            custo = c2.number_input("Custo Unitário:", value=0.0)
+            margem = c3.number_input("Margem (%)", value=40.0)
+            validade = st.date_input("Data de Validade:", value=datetime.now() + timedelta(days=90))
+            
+            preco_sugerido = custo * (1 + (margem/100))
+            preco_venda = st.number_input("Preço de Venda Final:", value=preco_sugerido)
+            
+            if st.form_submit_button("Atualizar Estoque"):
+                idx = df_p[df_p['nome'] == prod_sel].index[0]
+                df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) + qtd
+                df_p.at[idx, 'preco'] = preco_venda
+                df_p.at[idx, 'validade'] = validade.strftime("%d/%m/%Y")
+                conn.update(worksheet="produtos", data=df_p)
+                st.cache_data.clear()
+                st.success("Dados salvos com sucesso!")
+                time.sleep(1)
+                st.rerun()
+
+# --- INVENTÁRIO ---
+elif menu == "📦 Inventário":
+    st.header("📦 Gestão de Inventário")
+    df_p = carregar_dinamico("produtos")
+    if not df_p.empty:
+        st.dataframe(df_p, use_container_width=True, hide_index=True)
+        st.divider()
+        st.subheader("🗑️ Descontinuar Produto")
+        p_excluir = st.selectbox("Selecione para remover:", [""] + df_p['nome'].tolist())
+        if st.button("EXCLUIR PERMANENTEMENTE", type="secondary"):
+            if p_excluir:
+                df_p = df_p[df_p['nome'] != p_excluir]
+                conn.update(worksheet="produtos", data=df_p)
+                st.cache_data.clear()
+                st.error(f"{p_excluir} removido.")
+                time.sleep(1)
+                st.rerun()
+
+# --- CONFIGURAÇÕES ---
+elif menu == "📟 Configurações":
+    st.header("📟 Configurações do Sistema")
+    df_pts = carregar_dinamico("pontos")
+    
+    tab1, tab2 = st.tabs(["📍 Pontos de Venda", "💳 Máquinas"])
+    
+    with tab1:
+        st.dataframe(df_pts, use_container_width=True, hide_index=True)
+        st.subheader("Encerrar Contrato / Excluir PDV")
+        p_remover = st.selectbox("Selecione a Unidade:", [""] + df_pts['nome'].tolist())
+        if st.button("⚠️ CONFIRMAR EXCLUSÃO", type="primary"):
+            if p_remover:
+                df_pts = df_pts[df_pts['nome'] != p_remover]
+                conn.update(worksheet="pontos", data=df_pts)
+                st.cache_data.clear()
+                st.success("Unidade removida.")
+                st.rerun()
+
+    with tab2:
+        st.info("Configuração de máquinas e taxas operacionais.")
+        # Lógica de máquinas aqui conforme necessário...
+
+else:
+    st.info("Selecione uma opção válida.")
