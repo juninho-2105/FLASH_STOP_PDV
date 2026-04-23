@@ -198,6 +198,10 @@ elif menu == "🛒 Self-Checkout":
             st.session_state.carrinho = []
             st.rerun()
 
+# Opcional: O "else" só pode vir aqui, no final de tudo!
+else:
+    st.info("Selecione uma opção no menu.")
+
 # ==================== 5. SELF-CHECKOUT OTIMIZADO ====================
 elif menu == "🛒 Self-Checkout":
     # CSS para botões menores e compactos
