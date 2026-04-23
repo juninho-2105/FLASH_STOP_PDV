@@ -245,7 +245,7 @@ with col_l2:
 df_p = carregar_dinamico("produtos")
 df_p.columns = df_p.columns.str.strip() # Limpeza de colunas
     
-    st.write("")
+st.write("")
     # Campo de seleção configurado para focar o leitor
     p_nome = st.selectbox("Aguardando bip ou seleção...", [""] + df_p['nome'].tolist(), key="scanner_input")
 
