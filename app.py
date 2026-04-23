@@ -77,6 +77,7 @@ if st.sidebar.button("🚪 Sair"):
 
 # ==================== 4. LÓGICA DAS TELAS ====================
 
+# ---DASHBOARD E ALERTAS ---
 if menu == "📊 Dashboard & Alertas":
     st.header("📊 Painel de Controle")
     produtos = carregar_aba("produtos")
@@ -99,6 +100,7 @@ if menu == "📊 Dashboard & Alertas":
             vencidos = produtos[produtos['validade_dt'] < datetime.now()]
             if not vencidos.empty:
                 for _, r in vencidos.iterrows(): st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
+            else: st.success("Validades em dia!")
 
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
