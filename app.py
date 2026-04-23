@@ -3,124 +3,90 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
+import os
 
-# ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
+# ==================== 1. CONFIGURAÇÕES ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-# Inicialização de Estados de Sessão
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-if 'carrinho' not in st.session_state:
-    st.session_state.carrinho = []
-if 'unidade' not in st.session_state:
-    st.session_state.unidade = ""
-if 'perfil' not in st.session_state:
-    st.session_state.perfil = ""
+if 'autenticado' not in st.session_state: st.session_state.autenticado = False
+if 'carrinho' not in st.session_state: st.session_state.carrinho = []
+if 'unidade' not in st.session_state: st.session_state.unidade = ""
+if 'perfil' not in st.session_state: st.session_state.perfil = ""
 
-# Conexão com Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def carregar_dinamico(aba):
     return conn.read(worksheet=aba, ttl=0)
 
-# ==================== 2. SISTEMA DE LOGIN ====================
+# ==================== 2. LOGIN ====================
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
-    with st.form("login_form"):
-        user = st.text_input("Usuário / PDV")
-        senha = st.text_input("Senha", type="password")
-        if st.form_submit_button("Entrar", use_container_width=True):
+    with st.form("login"):
+        u = st.text_input("Usuário")
+        s = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar"):
             df_pts = carregar_dinamico("pontos")
-            if user == "admin" and senha == "flash123":
-                st.session_state.autenticado = True
-                st.session_state.unidade = "Administração"
-                st.session_state.perfil = "admin"
+            if u == "admin" and s == "flash123":
+                st.session_state.update({"autenticado": True, "unidade": "Adm", "perfil": "admin"})
                 st.rerun()
-            elif user in df_pts['nome'].values:
-                senha_correta = str(df_pts[df_pts['nome'] == user]['senha'].values[0])
-                if senha == senha_correta:
-                    st.session_state.autenticado = True
-                    st.session_state.unidade = user
-                    st.session_state.perfil = "pdv"
+            elif u in df_pts['nome'].values:
+                if s == str(df_pts[df_pts['nome'] == u]['senha'].values[0]):
+                    st.session_state.update({"autenticado": True, "unidade": u, "perfil": "pdv"})
                     st.rerun()
-                else:
-                    st.error("Senha incorreta.")
-            else:
-                st.error("Usuário não encontrado.")
     st.stop()
 
-# ==================== 3. DEFINIÇÃO DO MENU (ESSENCIAL) ====================
-# Este bloco cria a variável 'menu' que os IFs abaixo vão usar
+# ==================== 3. MENU ====================
+with st.sidebar:
+    st.title("⚡ Flash Stop")
+    opcoes = ["📊 Dashboard", "🛒 Self-Checkout", "💰 Entrada Mercadoria", "📦 Inventário", "💸 Despesas", "📂 Contabilidade", "📟 Configurações"] if st.session_state.perfil == "admin" else ["🛒 Self-Checkout", "📦 Inventário"]
+    menu = st.radio("Navegação", opcoes)
+    if st.button("🚪 Sair"):
+        st.session_state.autenticado = False
+        st.rerun()
 
-st.sidebar.title("⚡ Flash Stop")
-st.sidebar.write(f"📍 **{st.session_state.unidade}**")
-
-if st.session_state.perfil == "admin":
-    menu = st.sidebar.radio("Navegação", [
-        "📊 Dashboard", 
-        "🛒 Self-Checkout", 
-        "💰 Entrada Mercadoria", 
-        "📦 Inventário", 
-        "💸 Despesas",
-        "📂 Contabilidade", 
-        "📟 Configurações"
-    ])
-else:
-    # Perfil PDV (Totem do condomínio) só vê o Checkout e Inventário
-    menu = st.sidebar.radio("Navegação", ["🛒 Self-Checkout", "📦 Inventário"])
-
-st.sidebar.divider()
-
-# BOTÃO SAIR
-if st.sidebar.button("🚪 Sair / Trocar Usuário"):
-    st.session_state.autenticado = False
-    st.rerun()
-
-# ==================== 4. LÓGICA DE TELAS (O QUE JÁ ESTÁ NO SEU CÓDIGO) ====================
+# ==================== 4. TELAS (LÓGICA ÚNICA) ====================
 
 if menu == "📊 Dashboard":
-    # Seu código do Dashboard...
+    st.header("📊 Dashboard")
+    # Seu código de Dashboard aqui...
     pass
 
 elif menu == "🛒 Self-Checkout":
-    # Seu código do Checkout...
-    pass
-
-# ==================== NAVEGAÇÃO PRINCIPAL ====================
-
-if menu == "📊 Dashboard":
-    # Código do Dashboard
-    pass
-
-elif menu == "🛒 Self-Checkout":
-    # Código do Checkout
+    st.header("🛒 Checkout")
+    # Seu código de Checkout aqui...
     pass
 
 elif menu == "💰 Entrada Mercadoria":
-    # Código de Entrada
+    st.header("💰 Entrada")
+    # Seu código de Entrada aqui...
     pass
 
-elif menu == "📦 Inventário":
-    # Código de Inventário
-    pass
-
-# O ERRO ACONTECEU AQUI: Certifique-se de que NÃO existe um "else:" antes desta linha
 elif menu == "💸 Despesas":
     st.header("💸 Gestão de Despesas")
-    # Código de Despesas
-    pass
+    try:
+        df_d = carregar_dinamico("despesas")
+        # --- Lógica de cadastro de despesa ---
+        st.write("Registros de despesas ativos.")
+        # Se colocar um FORM aqui, certifique-se de fechá-lo!
+    except Exception as e:
+        st.error(f"Erro na aba despesas: {e}")
+    # O bloco TRY termina AQUI, agora o ELIF abaixo funciona!
+
+elif menu == "📦 Inventário":
+    st.header("📦 Inventário")
+    df_p = carregar_dinamico("produtos")
+    st.dataframe(df_p, use_container_width=True)
 
 elif menu == "📂 Contabilidade":
-    # Código de Contabilidade
+    st.header("📂 Contabilidade")
     pass
 
 elif menu == "📟 Configurações":
-    # Código de Configurações
+    st.header("📟 Configurações")
     pass
 
-# Opcional: O "else" só pode vir aqui, no final de tudo!
 else:
-    st.info("Selecione uma opção no menu.")
+    st.info("Selecione uma opção.")
 
 
 # ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
@@ -463,7 +429,7 @@ elif menu == "💰 Entrada Mercadoria":
                 )
 
 # ==================== 8. INVENTÁRIO (COM LIMPEZA DE VENCIDOS) ====================
-elif menu == "📦 Inventário":
+    elif menu == "📦 Inventário":
     st.header("📦 Gestão de Itens e Saneamento")
     
     df_p = carregar_dinamico("produtos")
