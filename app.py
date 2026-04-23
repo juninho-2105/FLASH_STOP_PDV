@@ -624,11 +624,12 @@ elif menu == "📟 Configurações":
     # Criando as duas abas
     aba_pdv, aba_maquinas = st.tabs(["📍 Pontos de Venda (PDVs)", "💳 Máquinas e Taxas"])
 
-    # --- ABA 1: CADASTRO DE PDVS (USUÁRIOS) ---
+  # --- ABA 1: CADASTRO DE PDVS (USUÁRIOS) ---
     with aba_pdv:
         st.subheader("Gestão de Acessos e Unidades")
         df_pts = carregar_dinamico("pontos")
         
+        # 1. Formulário de Cadastro
         with st.form("novo_p", clear_on_submit=True):
             st.write("Adicionar Nova Unidade")
             n = st.text_input("Nome da Unidade (ex: Condomínio Alpha)")
@@ -649,8 +650,40 @@ elif menu == "📟 Configurações":
                     st.error("Preencha nome e senha.")
         
         st.divider()
+        
+        # 2. Lista de Unidades com Opção de Excluir
         st.write("### Unidades Cadastradas")
-        st.dataframe(df_pts, use_container_width=True, hide_index=True)
+        if not df_pts.empty:
+            for idx, row in df_pts.iterrows():
+                # Criamos 3 colunas: Nome, Senha e o Botão de Lixeira
+                c1, c2, c3 = st.columns([2, 2, 1])
+                c1.write(f"📍 **{row['nome']}**")
+                c2.write(f"🔑 `{row['senha']}`")
+                
+                # Botão de excluir com confirmação simples
+                if c3.button("🗑️ Excluir", key=f"del_{row['nome']}", use_container_width=True):
+                    # Remove o PDV da lista
+                    df_pts_novo = df_pts[df_pts['nome'] != row['nome']]
+                    
+                    with st.spinner("Removendo unidade..."):
+                        # Atualiza a aba 'pontos'
+                        conn.update(worksheet="pontos", data=df_pts_novo)
+                        
+                        # LIMPEZA EM CASCATA: Também remove a máquina vinculada a esse PDV se existir
+                        try:
+                            df_maq_atual = carregar_dinamico("maquinas")
+                            if row['nome'] in df_maq_atual['pdv_vinculado'].values:
+                                df_maq_novo = df_maq_atual[df_maq_atual['pdv_vinculado'] != row['nome']]
+                                conn.update(worksheet="maquinas", data=df_maq_novo)
+                        except:
+                            pass # Ignora se a aba máquinas não existir ou estiver vazia
+                            
+                        st.cache_data.clear()
+                        st.success(f"Unidade {row['nome']} removida!")
+                        time.sleep(1)
+                        st.rerun()
+        else:
+            st.info("Nenhuma unidade cadastrada.")
 
     # --- ABA 2: VÍNCULO DE MÁQUINAS ---
     with aba_maquinas:
