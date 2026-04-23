@@ -198,68 +198,49 @@ if menu == "📊 Dashboard":
 
 # ==================== 5. SELF-CHECKOUT PROFISSIONAL V2 ====================
 elif menu == "🛒 Self-Checkout":
-    # CSS para ajuste de layout, centralização e evitar cortes
+    # CSS para ELIMINAR margens laterais e centralizar elementos
     st.markdown("""
         <style>
-        .block-container { padding-top: 1rem; padding-left: 1rem; padding-right: 1rem; }
+        /* Força o container a usar a largura total e remove o topo */
+        .block-container { 
+            padding-top: 1rem !important; 
+            max-width: 100% !important; 
+            padding-left: 2rem !important; 
+            padding-right: 2rem !important; 
+        }
         
-        /* Título FLASH STOP sem quebras e centralizado */
+        /* Título FLASH STOP */
         .main-title {
             text-align: center; 
             color: #2e7d32; 
-            font-size: 28px; 
+            font-size: 35px; /* Aumentei um pouco */
             font-weight: bold;
-            margin-bottom: 15px;
-            white-space: nowrap;
+            margin-bottom: 20px;
+            width: 100%;
         }
 
-        /* Estilo dos botões de ação ocupando largura total */
+        /* Ajuste do Seletor de Produtos */
+        .stSelectbox { margin-bottom: 10px; }
+
+        /* Botões de Finalizar/Cancelar */
         .stButton button {
-            width: 100%;
-            border-radius: 10px;
+            width: 100% !important;
+            max-width: 400px; /* Limita a largura em telas muito grandes para não ficar estranho */
+            display: block;
+            margin: 10px auto !important; /* Centraliza o botão na tela */
             height: 3.5rem;
             font-size: 18px;
-            font-weight: bold;
         }
 
-        /* Card de produto para garantir leitura do nome */
-        .product-card {
-            background-color: #ffffff;
-            border: 1px solid #eee;
-            border-left: 5px solid #2e7d32;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 5px;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
-        }
-        
-        /* Centralização das opções de pagamento */
+        /* Centralizar o Radio de Pagamento */
         div[role="radiogroup"] {
-            justify-content: center;
-            gap: 15px;
+            justify-content: center !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. TÍTULO
+    # Título centralizado sem cortes
     st.markdown('<div class="main-title">FLASH STOP</div>', unsafe_allow_html=True)
-
-    # 2. SELEÇÃO DE PRODUTO (Busca e Botão ADD)
-    df_p = carregar_dinamico("produtos")
-    c_busca, c_add = st.columns([3, 1.2])
-    
-    with c_busca:
-        p_nome = st.selectbox("Produto", [""] + df_p['nome'].tolist(), label_visibility="collapsed")
-    with c_add:
-        # Botão ADD corrigido
-        if st.button("➕ ADD", type="primary", key="btn_add_carrinho"):
-            if p_nome:
-                dados_p = df_p[df_p['nome'] == p_nome].iloc[0]
-                preco_unit = float(dados_p['preco_venda'] if 'preco_venda' in df_p.columns else dados_p['preco'])
-                st.session_state.carrinho.append({"id": time.time(), "produto": p_nome, "preco": preco_unit})
-                st.rerun()
-
-    st.divider()
 
    # 3. LISTAGEM DO CARRINHO
     if st.session_state.carrinho:
