@@ -321,7 +321,7 @@ else:
         st.info("Carrinho vazio")
 
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
-    elif menu == "💸 Despesas":
+elif menu == "💸 Despesas":
     st.header("💸 Registro de Custos e Despesas")
     st.info("Lance aqui custos como aluguel, energia, reposição de estoque ou manutenção.")
 
