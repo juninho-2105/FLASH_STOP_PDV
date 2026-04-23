@@ -240,6 +240,73 @@ elif menu == "📦 Inventário":
                 time.sleep(1)
                 st.rerun()
 
+# --- GESTÃO DE DESPESAS ---
+elif menu == "💸 Despesas":
+    st.header("💸 Gestão de Despesas")
+    df_d = carregar_dinamico("despesas")
+    
+    tab_fixa, tab_variavel = st.tabs(["📌 Despesas Fixas (Recorrentes)", "💸 Despesas Variáveis"])
+
+    with tab_fixa:
+        st.subheader("Contas do Mês")
+        # Interface para facilitar o lançamento de contas padrão
+        col1, col2, col3 = st.columns(3)
+        tipo_fixo = col1.selectbox("Tipo de Conta:", ["Aluguel", "Energia", "Água", "Internet", "Condomínio", "Outros"])
+        valor_fixo = col2.number_input("Valor da Fatura (R$):", min_value=0.0, key="val_fixo")
+        vencimento = col3.date_input("Data de Vencimento:", value=datetime.now())
+
+        if st.button("Registrar Pagamento Fixo", use_container_width=True):
+            nova_despesa = pd.DataFrame([{
+                "data": vencimento.strftime("%d/%m/%Y"),
+                "categoria": "Fixa",
+                "descricao": tipo_fixo,
+                "valor": valor_fixo,
+                "unidade": st.session_state.unidade
+            }])
+            df_atualizado = pd.concat([df_d, nova_despesa], ignore_index=True)
+            conn.update(worksheet="despesas", data=df_atualizado)
+            st.cache_data.clear()
+            st.success(f"Pagamento de {tipo_fixo} registrado!")
+            time.sleep(1)
+            st.rerun()
+
+    with tab_variavel:
+        st.subheader("Gastos Pontuais")
+        with st.form("form_despesa_var"):
+            data_v = st.date_input("Data do Gasto:", value=datetime.now())
+            desc_v = st.text_input("Descrição (Ex: Reposição de Emergência, Limpeza):")
+            valor_v = st.number_input("Valor Pago (R$):", min_value=0.0)
+            
+            if st.form_submit_button("Salvar Despesa Variável"):
+                if desc_v and valor_v > 0:
+                    nova_despesa_v = pd.DataFrame([{
+                        "data": data_v.strftime("%d/%m/%Y"),
+                        "categoria": "Variável",
+                        "descricao": desc_v,
+                        "valor": valor_v,
+                        "unidade": st.session_state.unidade
+                    }])
+                    df_atualizado = pd.concat([df_d, nova_despesa_v], ignore_index=True)
+                    conn.update(worksheet="despesas", data=df_atualizado)
+                    st.cache_data.clear()
+                    st.success("Despesa variável salva!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("Preencha a descrição e o valor.")
+
+    st.divider()
+    st.subheader("📋 Histórico Recente")
+    if not df_d.empty:
+        # Filtra apenas as despesas da unidade atual (ou todas se for admin)
+        if st.session_state.perfil == "admin":
+            st.dataframe(df_d.tail(10), use_container_width=True, hide_index=True)
+        else:
+            df_unidade = df_d[df_d['unidade'] == st.session_state.unidade]
+            st.dataframe(df_unidade.tail(10), use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhuma despesa registrada ainda.")
+        
 # --- CONFIGURAÇÕES ---
 elif menu == "📟 Configurações":
     st.header("📟 Configurações do Sistema")
