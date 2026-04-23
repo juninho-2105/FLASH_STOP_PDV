@@ -170,54 +170,51 @@ if menu == "📊 Dashboard":
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
 
-# ==================== ABA: SELF-CHECKOUT (LOGO IDÊNTICO À FOTO) ====================
+# ==================== ABA: SELF-CHECKOUT (VERSÃO FINAL CORRIGIDA) ====================
 elif menu == "🛒 Self-Checkout":
-    # --- LOGO CUSTOMIZADO (HTML/CSS) ---
+    # 1. LOGO IDENTIDADE VISUAL (Fundo Preto, Raio Verde, Escrita exata)
     st.markdown("""
         <style>
         .logo-container {
             background-color: black;
-            padding: 30px;
+            padding: 25px;
             border-radius: 15px;
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-family: 'Arial Black', Gadget, sans-serif; /* Fonte robusta similar */
+            font-family: 'Arial Black', sans-serif;
         }
         .logo-lightning {
-            color: #32CD32; /* Verde Limão */
-            font-size: 80px;
-            margin-right: 20px;
-            line-height: 1;
+            color: #32CD32;
+            font-size: 70px;
+            margin-right: 15px;
         }
         .logo-text-block {
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            line-height: 1;
+            line-height: 0.9;
         }
         .logo-flash {
-            color: #32CD32; /* Verde Limão */
-            font-size: 60px;
-            text-transform: lowercase; /* Garante minúsculas */
+            color: #32CD32;
+            font-size: 50px;
+            text-transform: lowercase;
             font-weight: bold;
         }
         .logo-stop {
             color: white;
-            font-size: 60px;
-            text-transform: lowercase; /* Garante minúsculas */
+            font-size: 50px;
+            text-transform: lowercase;
             font-weight: bold;
-            margin-top: -10px; /* Cola as linhas */
         }
         .logo-convenience {
             color: white;
-            font-size: 16px;
-            text-transform: uppercase; /* Garante maiúsculas */
-            letter-spacing: 2px; /* Espaçamento entre letras */
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
             margin-top: 5px;
-            font-weight: normal;
         }
         </style>
         <div class="logo-container">
@@ -229,105 +226,108 @@ elif menu == "🛒 Self-Checkout":
             </div>
         </div>
     """, unsafe_allow_html=True)
-    
-    st.markdown("<h3 style='text-align: center;'>Terminal de Autoatendimento</h3>", unsafe_allow_html=True)
-    
-    # --- 1. Carregamento e Tratamento de Dados (Foco em preco_venda) ---
+
+    # 2. FUNÇÃO DE TRATAMENTO DE PREÇO (Resolve o erro de 10x o valor)
+    def sanitizar_preco_venda(valor):
+        try:
+            # Converte para string e limpa tudo que não é número ou pontuação
+            v = str(valor).replace('R$', '').strip()
+            # Se vier algo como "1.200,50", remove o ponto e troca a vírgula
+            if ',' in v:
+                v = v.replace('.', '').replace(',', '.')
+            return float(v)
+        except:
+            return 0.0
+
+    # 3. CARREGAMENTO E PREPARAÇÃO DOS PRODUTOS
     df_p = carregar_dinamico("produtos")
     
-    if not df_p.empty:
-        # Função para garantir a leitura correta do preco_venda (trata R$, vírgulas e pontos)
-        def sanitizar_preco(valor):
-            try:
-                v = str(valor).replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
-                return float(v)
-            except:
-                return 0.0
-
-        # Define a coluna correta (preco_venda) e limpa os dados
-        col_preco = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
-        df_p[col_preco] = df_p[col_preco].apply(sanitizar_preco)
+    if df_p is not None and not df_p.empty:
+        col_ativa = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
         
-        # --- 2. Entrada de Produto (Bip ou Manual com Botão de Confirmação) ---
         st.subheader("🛍️ Adicionar Produto")
-        col_input, col_btn = st.columns([3, 1])
+        col_in, col_bt = st.columns([3, 1])
         
-        with col_input:
+        with col_in:
             p_selecionado = st.selectbox(
-                "Use o leitor ou busque pelo nome:", 
+                "Passe o produto no leitor ou digite o nome:", 
                 [""] + df_p['nome'].tolist(), 
-                key="input_checkout_final_v1"
+                key="input_checkout_v4"
             )
         
-        with col_btn:
-            # O botão evita que o sistema processe bips falsos ou recarregamentos duplicados
-            if st.button("➕ Adicionar", use_container_width=True):
+        with col_bt:
+            if st.button("➕ ADICIONAR", use_container_width=True, type="secondary"):
                 if p_selecionado:
-                    item_info = df_p[df_p['nome'] == p_selecionado].iloc[0]
+                    dados = df_p[df_p['nome'] == p_selecionado].iloc[0]
+                    # Aplica a sanitização aqui para garantir o valor unitário correto
+                    preco_limpo = sanitizar_preco_venda(dados[col_ativa])
+                    
                     st.session_state.carrinho.append({
-                        "produto": item_info['nome'], 
-                        "preco": item_info[col_preco], # Usando o preço sanitizado de preco_venda
+                        "produto": dados['nome'], 
+                        "preco": preco_limpo,
                         "unidade": st.session_state.unidade
                     })
-                    st.toast(f"✅ {p_selecionado} no carrinho!")
+                    st.toast(f"{p_selecionado} adicionado!")
                     time.sleep(0.1)
                     st.rerun()
 
         st.divider()
 
-        # --- 3. Exibição do Carrinho e Pagamento ---
+        # 4. EXIBIÇÃO DO CARRINHO E TOTAL
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
+            # Agrupa para mostrar quantidades (2x, 3x...)
             resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
 
             for idx, row in resumo.iterrows():
-                c_item, c_sub = st.columns([5, 1])
-                c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f})")
-                if c_sub.button("—", key=f"btn_del_{idx}"):
+                c_txt, c_btn = st.columns([5, 1])
+                c_txt.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f})")
+                if c_btn.button("🗑️", key=f"del_item_{idx}"):
                     for i, p in enumerate(st.session_state.carrinho):
                         if p['produto'] == row['produto']:
                             st.session_state.carrinho.pop(i)
                             break
                     st.rerun()
 
-            total_venda = df_cart['preco'].sum()
-            st.markdown(f"<h2 style='text-align: center;'>Total: R$ {total_venda:.2f}</h2>", unsafe_allow_html=True)
+            total_final = df_cart['preco'].sum()
+            st.markdown(f"<h2 style='text-align: center; color: black;'>TOTAL: R$ {total_final:.2f}</h2>", unsafe_allow_html=True)
             
-            forma_pagto = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
-
-            st.write("") 
-
-            # --- 4. Botões de Finalização (Empilhados e Centralizados) ---
+            # 5. FINALIZAÇÃO
+            forma_pgto = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+            
+            st.write("")
             if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
-                # Registro da venda e baixa de estoque...
-                nova_venda = pd.DataFrame([{
+                # Registro da venda
+                venda_row = pd.DataFrame([{
                     "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                     "unidade": st.session_state.unidade,
-                    "valor_bruto": total_venda,
-                    "valor_liquido": total_venda * 0.97, 
-                    "forma_pgto": forma_pagto
+                    "valor_bruto": total_final,
+                    "valor_liquido": total_final * 0.97, # Taxa de 3% exemplo
+                    "forma_pgto": forma_pgto
                 }])
                 
+                # Baixa de estoque
                 for item in st.session_state.carrinho:
                     idx_p = df_p[df_p['nome'] == item['produto']].index[0]
                     df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
 
-                conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), nova_venda], ignore_index=True))
+                # Atualiza Sheets
+                conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), venda_row], ignore_index=True))
                 conn.update(worksheet="produtos", data=df_p)
                 
                 st.session_state.carrinho = []
-                st.success("Compra Finalizada!")
+                st.success("Compra finalizada! Obrigado pela preferência.")
                 st.balloons()
-                time.sleep(1.5)
+                time.sleep(2)
                 st.rerun()
-                
+
             if st.button("❌ CANCELAR COMPRA", use_container_width=True):
                 st.session_state.carrinho = []
                 st.rerun()
         else:
-            st.info("Aguardando produtos...")
+            st.info("Aguardando produtos para iniciar a compra.")
     else:
-        st.warning("Nenhum produto cadastrado no inventário.")
+        st.warning("Verifique a planilha: nenhum produto encontrado.")
 
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
