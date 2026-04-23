@@ -52,14 +52,15 @@ st.sidebar.write(f"📍 **{st.session_state.unidade}**")
 
 if st.session_state.perfil == "admin":
     menu = st.sidebar.radio("Navegação", [
- if st.session_state.perfil == "admin":
-    menu = st.sidebar.radio("Navegação", [
         "📊 Dashboard", 
         "🛒 Self-Checkout", 
-        "📱 Pedidos Online", # Nova aba
+        "📱 Pedidos Online", 
         "💰 Entrada Mercadoria", 
-        # ... restantes
-    ])
+        "📦 Inventário", 
+        "💸 Despesas",
+        "📂 Contabilidade", 
+        "📟 Configurações"
+    ]) 
 else:
     menu = st.sidebar.radio("Navegação", ["🛒 Self-Checkout", "📱 Pedidos Online", "📦 Inventário"])
     st.session_state.autenticado = False
