@@ -242,8 +242,8 @@ with col_l2:
             st.markdown("<h3 style='text-align: center; color: #2e7d32; margin:0;'>FLASH STOP</h3>", unsafe_allow_html=True)
 
     # 2. BUSCA AUTOMÁTICA (BIPOU, PASSOU)
-    df_p = carregar_dinamico("produtos")
-    df_p.columns = df_p.columns.str.strip() # Limpeza de colunas
+df_p = carregar_dinamico("produtos")
+df_p.columns = df_p.columns.str.strip() # Limpeza de colunas
     
     st.write("")
     # Campo de seleção configurado para focar o leitor
