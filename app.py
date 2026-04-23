@@ -170,49 +170,77 @@ if menu == "📊 Dashboard":
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
 
-# --- SELF-CHECKOUT COM ENTRADA MANUAL E TRATAMENTO DE PREÇO ---
+# ==================== ABA: SELF-CHECKOUT ====================
 elif menu == "🛒 Self-Checkout":
+    # Logo exclusivo desta aba: Preto e Centralizado
+    st.markdown("""
+        <style>
+        .flash-header-checkout {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding: 15px 0;
+            margin-bottom: 10px;
+        }
+        .flash-title-black {
+            color: black; 
+            font-weight: 900;
+            font-size: 50px;
+            font-family: 'Arial Black', Gadget, sans-serif;
+            letter-spacing: -1px;
+        }
+        </style>
+        <div class="flash-header-checkout">
+            <span class="flash-title-black">⚡ Flash Stop</span>
+        </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown("<h3 style='text-align: center;'>Terminal de Autoatendimento</h3>", unsafe_allow_html=True)
     
+    # 1. Carregamento e Tratamento de Dados
     df_p = carregar_dinamico("produtos")
     
     if not df_p.empty:
-        # Tratamento robusto de preços do Inventário
-        def limpar_preco(valor):
+        # Função para garantir a leitura correta do preço_venda
+        def tratar_preco(valor):
             try:
                 v = str(valor).replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
                 return float(v)
             except:
                 return 0.0
 
-        df_p['preco'] = df_p['preco'].apply(limpar_preco)
+        # Mapeia para a coluna preco_venda
+        col_preco = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
+        df_p[col_preco] = df_p[col_preco].apply(tratar_preco)
         
-        # Interface de Entrada de Produto
+        # 2. Entrada de Produto
         st.subheader("🛍️ Adicionar Produto")
-        col_ent1, col_ent2 = st.columns([3, 1])
+        col_input, col_btn = st.columns([3, 1])
         
-        with col_ent1:
-            p_entrada = st.selectbox("Busque pelo nome ou use o leitor:", 
-                                     [""] + df_p['nome'].tolist(), 
-                                     key="entrada_manual_bip")
+        with col_input:
+            p_selecionado = st.selectbox(
+                "Use o leitor ou busque pelo nome:", 
+                [""] + df_p['nome'].tolist(), 
+                key="input_checkout_final"
+            )
         
-        with col_ent2:
-            # O botão evita que o item entre "sozinho" no carrinho
+        with col_btn:
             if st.button("➕ Adicionar", use_container_width=True):
-                if p_entrada:
-                    item_dados = df_p[df_p['nome'] == p_entrada].iloc[0]
+                if p_selecionado:
+                    item_info = df_p[df_p['nome'] == p_selecionado].iloc[0]
                     st.session_state.carrinho.append({
-                        "produto": item_dados['nome'], 
-                        "preco": item_dados['preco'],
+                        "produto": item_info['nome'], 
+                        "preco": item_info[col_preco],
                         "unidade": st.session_state.unidade
                     })
-                    st.toast(f"✅ {p_entrada} no carrinho!")
+                    st.toast(f"✅ {p_selecionado} no carrinho!")
                     time.sleep(0.1)
                     st.rerun()
 
         st.divider()
 
-        # 2. Exibição do Carrinho
+        # 3. Carrinho e Pagamento
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
             resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
@@ -220,7 +248,7 @@ elif menu == "🛒 Self-Checkout":
             for idx, row in resumo.iterrows():
                 c_item, c_sub = st.columns([5, 1])
                 c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f})")
-                if c_sub.button("—", key=f"btn_rem_{idx}"):
+                if c_sub.button("—", key=f"btn_del_{idx}"):
                     for i, p in enumerate(st.session_state.carrinho):
                         if p['produto'] == row['produto']:
                             st.session_state.carrinho.pop(i)
@@ -230,20 +258,21 @@ elif menu == "🛒 Self-Checkout":
             total_venda = df_cart['preco'].sum()
             st.markdown(f"<h2 style='text-align: center;'>Total: R$ {total_venda:.2f}</h2>", unsafe_allow_html=True)
             
-            forma = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+            forma_pagto = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
 
             st.write("") 
-            # Botões de Ação Centralizados
+
+            # 4. Botões de Finalização Centralizados
             if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
                 nova_venda = pd.DataFrame([{
                     "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                     "unidade": st.session_state.unidade,
                     "valor_bruto": total_venda,
                     "valor_liquido": total_venda * 0.97, 
-                    "forma_pgto": forma
+                    "forma_pgto": forma_pagto
                 }])
                 
-                # Atualização de estoque
+                # Baixa no estoque
                 for item in st.session_state.carrinho:
                     idx_p = df_p[df_p['nome'] == item['produto']].index[0]
                     df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
@@ -261,8 +290,7 @@ elif menu == "🛒 Self-Checkout":
                 st.session_state.carrinho = []
                 st.rerun()
         else:
-            st.info("O carrinho está vazio. Selecione um produto acima.")
-
+            st.info("Aguardando produtos...")
 
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
