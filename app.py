@@ -110,7 +110,28 @@ elif menu == "📟 Configurações":
 # Opcional: O "else" só pode vir aqui, no final de tudo!
 else:
     st.info("Selecione uma opção no menu.")
-
+    
+elif menu == "📱 Pedidos Online":
+    st.header("📱 Pedidos Recebidos Online")
+    
+    df_vendas = carregar_dinamico("vendas")
+    # Filtra apenas pedidos pendentes da unidade atual
+    pedidos_online = df_vendas[(df_vendas['pdv'] == st.session_state.unidade) & 
+                               (df_vendas['status'] == 'Pendente')]
+    
+    if not pedidos_online.empty:
+        st.dataframe(pedidos_online, use_container_width=True)
+        
+        id_pedido = st.selectbox("Selecione o ID do Pedido para Concluir:", pedidos_online.index)
+        if st.button("Confirmar Entrega/Retirada"):
+            # Atualiza o status na planilha
+            df_vendas.at[id_pedido, 'status'] = 'Concluído'
+            conn.update(worksheet="vendas", data=df_vendas)
+            st.cache_data.clear()
+            st.success("Pedido finalizado!")
+            st.rerun()
+    else:
+        st.info("Nenhum pedido online pendente no momento.")
 
 # ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
 if menu == "📊 Dashboard":
