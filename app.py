@@ -317,7 +317,7 @@ if st.session_state.carrinho:
                 st.session_state.carrinho = []
                 time.sleep(1.5)
                 st.rerun()
-    else:
+else:
         st.info("Carrinho vazio")
 
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
