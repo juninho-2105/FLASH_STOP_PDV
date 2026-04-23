@@ -170,7 +170,164 @@ if menu == "📊 Dashboard":
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
 
+# ==================== ABA: SELF-CHECKOUT (LOGO IDÊNTICO À FOTO) ====================
+elif menu == "🛒 Self-Checkout":
+    # --- LOGO CUSTOMIZADO (HTML/CSS) ---
+    st.markdown("""
+        <style>
+        .logo-container {
+            background-color: black;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial Black', Gadget, sans-serif; /* Fonte robusta similar */
+        }
+        .logo-lightning {
+            color: #32CD32; /* Verde Limão */
+            font-size: 80px;
+            margin-right: 20px;
+            line-height: 1;
+        }
+        .logo-text-block {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            line-height: 1;
+        }
+        .logo-flash {
+            color: #32CD32; /* Verde Limão */
+            font-size: 60px;
+            text-transform: lowercase; /* Garante minúsculas */
+            font-weight: bold;
+        }
+        .logo-stop {
+            color: white;
+            font-size: 60px;
+            text-transform: lowercase; /* Garante minúsculas */
+            font-weight: bold;
+            margin-top: -10px; /* Cola as linhas */
+        }
+        .logo-convenience {
+            color: white;
+            font-size: 16px;
+            text-transform: uppercase; /* Garante maiúsculas */
+            letter-spacing: 2px; /* Espaçamento entre letras */
+            margin-top: 5px;
+            font-weight: normal;
+        }
+        </style>
+        <div class="logo-container">
+            <div class="logo-lightning">⚡</div>
+            <div class="logo-text-block">
+                <div class="logo-flash">flash</div>
+                <div class="logo-stop">stop</div>
+                <div class="logo-convenience">CONVENIÊNCIA</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<h3 style='text-align: center;'>Terminal de Autoatendimento</h3>", unsafe_allow_html=True)
+    
+    # --- 1. Carregamento e Tratamento de Dados (Foco em preco_venda) ---
+    df_p = carregar_dinamico("produtos")
+    
+    if not df_p.empty:
+        # Função para garantir a leitura correta do preco_venda (trata R$, vírgulas e pontos)
+        def sanitizar_preco(valor):
+            try:
+                v = str(valor).replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
+                return float(v)
+            except:
+                return 0.0
 
+        # Define a coluna correta (preco_venda) e limpa os dados
+        col_preco = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
+        df_p[col_preco] = df_p[col_preco].apply(sanitizar_preco)
+        
+        # --- 2. Entrada de Produto (Bip ou Manual com Botão de Confirmação) ---
+        st.subheader("🛍️ Adicionar Produto")
+        col_input, col_btn = st.columns([3, 1])
+        
+        with col_input:
+            p_selecionado = st.selectbox(
+                "Use o leitor ou busque pelo nome:", 
+                [""] + df_p['nome'].tolist(), 
+                key="input_checkout_final_v1"
+            )
+        
+        with col_btn:
+            # O botão evita que o sistema processe bips falsos ou recarregamentos duplicados
+            if st.button("➕ Adicionar", use_container_width=True):
+                if p_selecionado:
+                    item_info = df_p[df_p['nome'] == p_selecionado].iloc[0]
+                    st.session_state.carrinho.append({
+                        "produto": item_info['nome'], 
+                        "preco": item_info[col_preco], # Usando o preço sanitizado de preco_venda
+                        "unidade": st.session_state.unidade
+                    })
+                    st.toast(f"✅ {p_selecionado} no carrinho!")
+                    time.sleep(0.1)
+                    st.rerun()
+
+        st.divider()
+
+        # --- 3. Exibição do Carrinho e Pagamento ---
+        if st.session_state.carrinho:
+            df_cart = pd.DataFrame(st.session_state.carrinho)
+            resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
+
+            for idx, row in resumo.iterrows():
+                c_item, c_sub = st.columns([5, 1])
+                c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f})")
+                if c_sub.button("—", key=f"btn_del_{idx}"):
+                    for i, p in enumerate(st.session_state.carrinho):
+                        if p['produto'] == row['produto']:
+                            st.session_state.carrinho.pop(i)
+                            break
+                    st.rerun()
+
+            total_venda = df_cart['preco'].sum()
+            st.markdown(f"<h2 style='text-align: center;'>Total: R$ {total_venda:.2f}</h2>", unsafe_allow_html=True)
+            
+            forma_pagto = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+
+            st.write("") 
+
+            # --- 4. Botões de Finalização (Empilhados e Centralizados) ---
+            if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
+                # Registro da venda e baixa de estoque...
+                nova_venda = pd.DataFrame([{
+                    "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "unidade": st.session_state.unidade,
+                    "valor_bruto": total_venda,
+                    "valor_liquido": total_venda * 0.97, 
+                    "forma_pgto": forma_pagto
+                }])
+                
+                for item in st.session_state.carrinho:
+                    idx_p = df_p[df_p['nome'] == item['produto']].index[0]
+                    df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
+
+                conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), nova_venda], ignore_index=True))
+                conn.update(worksheet="produtos", data=df_p)
+                
+                st.session_state.carrinho = []
+                st.success("Compra Finalizada!")
+                st.balloons()
+                time.sleep(1.5)
+                st.rerun()
+                
+            if st.button("❌ CANCELAR COMPRA", use_container_width=True):
+                st.session_state.carrinho = []
+                st.rerun()
+        else:
+            st.info("Aguardando produtos...")
+    else:
+        st.warning("Nenhum produto cadastrado no inventário.")
 
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
