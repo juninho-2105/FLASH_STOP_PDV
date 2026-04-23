@@ -414,6 +414,51 @@ elif menu == "📟 Configurações":
                 else:
                     st.error("Preencha nome e senha.")
 
+    # --- TAB: GESTÃO DE PDVs ---
+    with tab_pdv:
+        st.subheader("Unidades Cadastradas")
+        if not df_pts.empty:
+            # Exibe a tabela para conferência
+            st.dataframe(df_pts[['nome', 'senha']], use_container_width=True, hide_index=True)
+            
+            st.divider()
+            st.subheader("🗑️ Remover Unidade")
+            # Seletor para escolher qual PDV deletar
+            pdv_para_excluir = st.selectbox("Selecione o PDV para remover:", [""] + df_pts['nome'].tolist())
+            
+            if st.button("Confirmar Exclusão do PDV", type="secondary", use_container_width=True):
+                if pdv_para_excluir != "":
+                    # Filtra o DataFrame mantendo todos, exceto o selecionado
+                    df_pts_novo = df_pts[df_pts['nome'] != pdv_para_excluir]
+                    
+                    # Atualiza o Google Sheets
+                    conn.update(worksheet="pontos", data=df_pts_novo)
+                    st.cache_data.clear() # Limpa o cache para atualizar a lista
+                    
+                    st.error(f"Unidade {pdv_para_excluir} removida com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("Selecione uma unidade para excluir.")
+        else:
+            st.info("Nenhum PDV cadastrado.")
+        
+        st.divider()
+        st.subheader("➕ Inserir Novo PDV")
+        with st.form("novo_pdv_form"):
+            novo_nome = st.text_input("Nome da Unidade / Condomínio:")
+            nova_senha = st.text_input("Senha de Acesso:", type="password")
+            if st.form_submit_button("Cadastrar Unidade"):
+                if novo_nome and nova_senha:
+                    novo_pdv = pd.DataFrame([{"nome": novo_nome, "senha": nova_senha}])
+                    df_pts_atu = pd.concat([df_pts, novo_pdv], ignore_index=True)
+                    conn.update(worksheet="pontos", data=df_pts_atu)
+                    st.cache_data.clear()
+                    st.success(f"PDV {novo_nome} cadastrado!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Preencha nome e senha.")
     # --- TAB: MÁQUINAS E TAXAS ---
     with tab_maquinas:
         st.subheader("Máquinas Vinculadas")
