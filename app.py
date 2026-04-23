@@ -77,66 +77,86 @@ if st.sidebar.button("🚪 Sair"):
 
 # ==================== 4. LÓGICA DAS TELAS ====================
 
-# --- DASHBOARD REVISADO ---
+# ==================== DASHBOARD & ALERTAS INTEGRADO ====================
 if menu == "📊 Dashboard":
-    st.header("📊 Performance Financeira")
+    st.header("📊 Painel de Controle Flash Stop")
     
-    # Carregamento seguro dos dados
+    # 1. Carregamento de Dados
     df_v = carregar_dinamico("vendas")
     df_d = carregar_dinamico("despesas")
-    
-    # Verificação de colunas e dados
+    df_p = carregar_dinamico("produtos")
+
+    # --- PARTE A: MÉTRICAS FINANCEIRAS ---
+    st.subheader("💰 Resumo Financeiro")
     if not df_v.empty:
-        # Garantir que as colunas numéricas sejam tratadas corretamente
         df_v['valor_bruto'] = pd.to_numeric(df_v['valor_bruto'], errors='coerce').fillna(0)
         df_v['valor_liquido'] = pd.to_numeric(df_v['valor_liquido'], errors='coerce').fillna(0)
         
-        # Filtro opcional por unidade para o Admin ver tudo ou apenas uma
-        unidade_f = st.selectbox("Filtrar Visão:", ["Geral"] + df_v['unidade'].unique().tolist())
-        
-        if unidade_f != "Geral":
-            df_v_view = df_v[df_v['unidade'] == unidade_f]
-            df_d_view = df_d[df_d['unidade'] == unidade_f] if not df_d.empty else df_d
-        else:
-            df_v_view = df_v
-            df_d_view = df_d
-
-        # Cálculos principais
-        bruto = df_v_view['valor_bruto'].sum()
-        liquido = df_v_view['valor_liquido'].sum()
+        # Cálculos
+        bruto = df_v['valor_bruto'].sum()
+        liquido = df_v['valor_liquido'].sum()
         
         gastos = 0.0
         if not df_d.empty and 'valor' in df_d.columns:
-            df_d_view['valor'] = pd.to_numeric(df_d_view['valor'], errors='coerce').fillna(0)
-            gastos = df_d_view['valor'].sum()
+            df_d['valor'] = pd.to_numeric(df_d['valor'], errors='coerce').fillna(0)
+            gastos = df_d['valor'].sum()
 
         lucro_real = liquido - gastos
 
-        # Exibição dos Cartões (Métricas)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
-        c2.metric("Líquido (Pós Taxas)", f"R$ {liquido:,.2f}")
-        c3.metric("Despesas Totais", f"R$ {gastos:,.2f}")
-        c4.metric("Lucro Real", f"R$ {lucro_real:,.2f}", delta=f"{((lucro_real/bruto)*100 if bruto > 0 else 0):.1f}% margem")
-
-        st.divider()
-
-        # Gráficos Simples
-        col_g1, col_g2 = st.columns(2)
-        
-        with col_g1:
-            st.subheader("Vendas por Unidade")
-            vendas_unidade = df_v.groupby('unidade')['valor_bruto'].sum()
-            st.bar_chart(vendas_unidade)
-
-        with col_g2:
-            st.subheader("Evolução de Vendas")
-            if 'data' in df_v.columns:
-                df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
-                vendas_dia = df_v.groupby('data')['valor_bruto'].sum()
-                st.line_chart(vendas_dia)
+        # Exibição das Métricas em 4 colunas
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
+        m2.metric("Líquido (Pós Taxas)", f"R$ {liquido:,.2f}")
+        m3.metric("Despesas Totais", f"R$ {gastos:,.2f}")
+        m4.metric("Lucro Real", f"R$ {lucro_real:,.2f}")
     else:
-        st.info("Aguardando os primeiros dados de vendas para gerar indicadores.")
+        st.info("Aguardando dados de vendas para métricas financeiras.")
+
+    st.divider()
+
+    # --- PARTE B: ALERTAS OPERACIONAIS (ESTOQUE E VALIDADE) ---
+    st.subheader("🚨 Alertas de Operação")
+    
+    if df_p.empty:
+        st.info("💡 Cadastre produtos na aba 'Gestão de Estoque' para ativar os alertas.")
+    else:
+        col_estoque, col_validade = st.columns(2)
+
+        with col_estoque:
+            st.markdown("### ⚠️ Estoque Baixo")
+            # Converte estoque para número
+            df_p['estoque'] = pd.to_numeric(df_p['estoque'], errors='coerce').fillna(0)
+            # Define o limite de 5 unidades conforme solicitado
+            baixo = df_p[df_p['estoque'] < 5]
+            
+            if not baixo.empty:
+                for _, r in baixo.iterrows():
+                    st.error(f"**Repor:** {r['nome']} | Restam: {int(r['estoque'])} un")
+            else:
+                st.success("✅ Todos os itens com estoque em dia!")
+
+        with col_validade:
+            st.markdown("### 📅 Alerta de Validade")
+            # Converte para data tratando erros
+            df_p['validade_dt'] = pd.to_datetime(df_p['validade'], dayfirst=True, errors='coerce')
+            hoje = datetime.now()
+            
+            # Produtos vencidos ou que vencem em 7 dias
+            vencidos = df_p[df_p['validade_dt'] < hoje]
+            vencendo_logo = df_p[(df_p['validade_dt'] >= hoje) & (df_p['validade_dt'] <= hoje + timedelta(days=7))]
+
+            if not vencidos.empty:
+                for _, r in vencidos.iterrows():
+                    st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
+            
+            if not vencendo_logo.empty:
+                for _, r in vencendo_logo.iterrows():
+                    st.warning(f"**Vence em breve:** {r['nome']} ({r['validade']})")
+            
+            if vencidos.empty and vencendo_logo.empty:
+                st.success("✅ Nenhuma validade crítica encontrada!")
+
+    # --- PARTE C: GRÁFICO RÁPIDO ---
 
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
