@@ -77,26 +77,28 @@ if st.sidebar.button("🚪 Sair"):
 
 # ==================== 4. LÓGICA DAS TELAS ====================
 
-# --- DASHBOARD ---
-if menu == "📊 Dashboard":
-    st.header("📊 Performance Financeira")
-    df_v = carregar_dinamico("vendas")
-    df_d = carregar_dinamico("despesas")
-    df_p = carregar_dinamico("produtos")
-
-    if not df_v.empty and not df_d.empty:
-        bruto = pd.to_numeric(df_v['valor_bruto'], errors='coerce').sum()
-        liq = pd.to_numeric(df_v['valor_liquido'], errors='coerce').sum()
-        gastos = pd.to_numeric(df_d['valor'], errors='coerce').sum()
-        lucro = liq - gastos
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
-        c2.metric("Líquido", f"R$ {liq:,.2f}")
-        c3.metric("Despesas", f"R$ {gastos:,.2f}")
-        c4.metric("Lucro Real", f"R$ {lucro:,.2f}")
+if menu == "📊 Dashboard & Alertas":
+    st.header("📊 Painel de Controle")
+    produtos = carregar_aba("produtos")
+    
+    if produtos.empty:
+        st.info("💡 Cadastre produtos na aba 'Gestão de Estoque' para ver os alertas.")
     else:
-        st.info("Dados insuficientes para o Dashboard.")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("⚠️ Estoque Baixo")
+            produtos['estoque'] = pd.to_numeric(produtos['estoque'], errors='coerce').fillna(0)
+            baixo = produtos[produtos['estoque'] < 5]
+            if not baixo.empty:
+                for _, r in baixo.iterrows(): st.error(f"**Repor:** {r['nome']} ({int(r['estoque'])} un)")
+            else: st.success("Estoque em dia!")
+
+        with col2:
+            st.subheader("📅 Validades")
+            produtos['validade_dt'] = pd.to_datetime(produtos['validade'], dayfirst=True, errors='coerce')
+            vencidos = produtos[produtos['validade_dt'] < datetime.now()]
+            if not vencidos.empty:
+                for _, r in vencidos.iterrows(): st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
 
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
