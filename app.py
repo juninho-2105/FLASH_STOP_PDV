@@ -273,7 +273,7 @@ if p_nome:
 st.divider()
 
     # 3. CARRINHO COMPACTO (PARA CELULAR/MÁQUINA DE CARTÃO)
-    if st.session_state.carrinho:
+if st.session_state.carrinho:
         df_cart = pd.DataFrame(st.session_state.carrinho)
         resumo = df_cart.groupby('produto').agg({'preco': 'first', 'id': 'count'}).rename(columns={'id': 'qtd'}).reset_index()
 
