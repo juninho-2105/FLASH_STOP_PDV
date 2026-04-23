@@ -52,22 +52,16 @@ st.sidebar.write(f"📍 **{st.session_state.unidade}**")
 
 if st.session_state.perfil == "admin":
     menu = st.sidebar.radio("Navegação", [
+ if st.session_state.perfil == "admin":
+    menu = st.sidebar.radio("Navegação", [
         "📊 Dashboard", 
         "🛒 Self-Checkout", 
+        "📱 Pedidos Online", # Nova aba
         "💰 Entrada Mercadoria", 
-        "📦 Inventário", 
-        "💸 Despesas",
-        "📂 Contabilidade", 
-        "📟 Configurações"
+        # ... restantes
     ])
 else:
-    # Perfil PDV (Totem do condomínio) só vê o Checkout e Inventário
-    menu = st.sidebar.radio("Navegação", ["🛒 Self-Checkout", "📦 Inventário"])
-
-st.sidebar.divider()
-
-# BOTÃO SAIR
-if st.sidebar.button("🚪 Sair / Trocar Usuário"):
+    menu = st.sidebar.radio("Navegação", ["🛒 Self-Checkout", "📱 Pedidos Online", "📦 Inventário"])
     st.session_state.autenticado = False
     st.rerun()
 
