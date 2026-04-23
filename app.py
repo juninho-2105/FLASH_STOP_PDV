@@ -395,29 +395,6 @@ elif menu == "📟 Configurações":
     with tab_pdv:
         st.subheader("Unidades Cadastradas")
         if not df_pts.empty:
-            st.dataframe(df_pts[['nome', 'senha']], use_container_width=True, hide_index=True)
-        
-        st.divider()
-        st.subheader("➕ Inserir Novo PDV")
-        with st.form("novo_pdv_form"):
-            novo_nome = st.text_input("Nome da Unidade / Condomínio:")
-            nova_senha = st.text_input("Senha de Acesso:", type="password")
-            if st.form_submit_button("Cadastrar Unidade"):
-                if novo_nome and nova_senha:
-                    novo_pdv = pd.DataFrame([{"nome": novo_nome, "senha": nova_senha}])
-                    df_pts_atu = pd.concat([df_pts, novo_pdv], ignore_index=True)
-                    conn.update(worksheet="pontos", data=df_pts_atu)
-                    st.cache_data.clear()
-                    st.success(f"PDV {novo_nome} cadastrado!")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("Preencha nome e senha.")
-
-    # --- TAB: GESTÃO DE PDVs ---
-    with tab_pdv:
-        st.subheader("Unidades Cadastradas")
-        if not df_pts.empty:
             # Exibe a tabela para conferência
             st.dataframe(df_pts[['nome', 'senha']], use_container_width=True, hide_index=True)
             
