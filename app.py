@@ -128,78 +128,75 @@ else:
     st.info("Selecione uma opção no menu.")
 
 
-# ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
-if menu == "📊 Dashboard":
-    st.header("📊 Performance Financeira")
+# ==================== 4. SELF-CHECKOUT (COMPACTO) ====================
+elif menu == "🛒 Self-Checkout":
+    st.header("🛒 Finalizar Compra")
     
-    # Carregamento de dados
-    df_v = carregar_dinamico("vendas")
-    df_d = carregar_dinamico("despesas")
-    df_p = carregar_dinamico("produtos")
-    
-    # --- BLOCO DE KPIs ---
-    bruto = pd.to_numeric(df_v['valor_bruto'], errors='coerce').sum()
-    liq = pd.to_numeric(df_v['valor_liquido'], errors='coerce').sum()
-    gastos = pd.to_numeric(df_d['valor'], errors='coerce').sum()
-    lucro = liq - gastos
+    if not st.session_state.carrinho:
+        st.info("Seu carrinho está vazio.")
+    else:
+        # Tabela compacta de itens
+        for i, item in enumerate(st.session_state.carrinho):
+            col_nome, col_controles, col_subtotal = st.columns([2, 1.5, 1])
+            
+            with col_nome:
+                st.markdown(f"**{item['nome']}**")
+                st.caption(f"R$ {item['preco']:.2f}/un")
+            
+            with col_controles:
+                # Botões + e - o menor possível (lado a lado)
+                c_menos, c_qtd, c_mais = st.columns([1, 1, 1])
+                with c_menos:
+                    if st.button("➖", key=f"min_{i}"):
+                        if st.session_state.carrinho[i]['qtd'] > 1:
+                            st.session_state.carrinho[i]['qtd'] -= 1
+                            st.rerun()
+                        else:
+                            st.session_state.carrinho.pop(i)
+                            st.rerun()
+                with c_qtd:
+                    st.markdown(f"<div style='text-align:center; padding-top:5px'>{item['qtd']}</div>", unsafe_allow_html=True)
+                with c_mais:
+                    if st.button("➕", key=f"plus_{i}"):
+                        st.session_state.carrinho[i]['qtd'] += 1
+                        st.rerun()
+            
+            with col_subtotal:
+                sub = item['preco'] * item['qtd']
+                st.markdown(f"**R$ {sub:.2f}**")
+            st.divider()
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
-    c2.metric("Líquido (Pós Taxas)", f"R$ {liq:,.2f}")
-    c3.metric("Despesas Totais", f"R$ {gastos:,.2f}")
-    c4.metric("Lucro Real", f"R$ {lucro:,.2f}", delta=f"{lucro/bruto*100:.1f}%" if bruto > 0 else None)
-
-    st.divider()
-
-    # --- GRÁFICO DE VENDAS ---
-    st.subheader("📈 Evolução de Vendas")
-    if not df_v.empty:
-        try:
-            # Converte a data para gráfico
-            df_v['data_dt'] = pd.to_datetime(df_v['data'], format="%d/%m/%Y %H:%M", errors='coerce')
-            vendas_dia = df_v.groupby(df_v['data_dt'].dt.date)['valor_bruto'].sum()
-            st.area_chart(vendas_dia)
-        except:
-            st.info("Aguardando mais dados para gerar o gráfico.")
-
-    st.divider()
-
-    # --- BLOCO DE ALERTAS ---
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        st.subheader("🚨 Reposição (Estoque Crítico)")
-        # Filtra produtos onde estoque atual é menor ou igual ao mínimo
-        critico = df_p[df_p['estoque'].astype(int) <= df_p['estoque_minimo'].astype(int)]
-        if not critico.empty:
-            st.dataframe(critico[['nome', 'estoque', 'estoque_minimo']], 
-                         hide_index=True, use_container_width=True)
-        else:
-            st.success("Estoque abastecido em todas as unidades!")
-
-    with col_b:
-        st.subheader("📅 Alertas de Validade (15 dias)")
-        vencendo = []
-        hoje = datetime.now()
-        for _, r in df_p.iterrows():
-            try:
-                # Converte a data da planilha para comparar
-                dt_val = datetime.strptime(str(r['validade']), "%d/%m/%Y")
-                if dt_val <= hoje + timedelta(days=15):
-                    status = "VENCIDO" if dt_val < hoje else "Vence em breve"
-                    vencendo.append({
-                        "Produto": r['nome'], 
-                        "Qtd": r['estoque'], 
-                        "Data": r['validade'],
-                        "Status": status
-                    })
-            except:
-                continue
+        # --- ÁREA DE PAGAMENTO COMPACTA ---
+        total_venda = sum(item['preco'] * item['qtd'] for item in st.session_state.carrinho)
         
-        if vencendo:
-            st.dataframe(pd.DataFrame(vencendo), hide_index=True, use_container_width=True)
-        else:
-            st.success("Nenhum produto próximo ao vencimento!")
+        st.markdown(f"### Total: R$ {total_venda:.2f}")
+        
+        # Formas de pagamento em botões horizontais (mais rápido que selectbox)
+        forma_pagto = st.radio(
+            "Forma de Pagamento:",
+            ["Pix", "Débito", "Crédito"],
+            horizontal=True,
+            label_visibility="collapsed" # Esconde o label para ganhar espaço
+        )
+
+        if st.button("✅ FINALIZAR E PAGAR", use_container_width=True, type="primary"):
+            # Lógica de salvamento (exemplo simplificado)
+            nova_venda = {
+                "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "total": total_venda,
+                "metodo": forma_pagto,
+                "pdv": st.session_state.get('unidade_atual', 'N/A')
+            }
+            
+            # Aqui você chamaria sua função de salvar no Google Sheets
+            st.success("Pagamento aprovado! Obrigado.")
+            st.session_state.carrinho = [] # Limpa carrinho
+            time.sleep(2)
+            st.rerun()
+            
+        if st.button("❌ Cancelar Compra", variant="secondary"):
+            st.session_state.carrinho = []
+            st.rerun()
 
 # ==================== 5. SELF-CHECKOUT OTIMIZADO ====================
 elif menu == "🛒 Self-Checkout":
