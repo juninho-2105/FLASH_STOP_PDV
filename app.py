@@ -123,9 +123,6 @@ elif menu == "📟 Configurações":
     # Código de Configurações
     pass
 
-# Opcional: O "else" só pode vir aqui, no final de tudo!
-else:
-    st.info("Selecione uma opção no menu.")
 
 
 # ==================== 4. SELF-CHECKOUT (COMPACTO) ====================
