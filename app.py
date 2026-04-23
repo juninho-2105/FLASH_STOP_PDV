@@ -10,23 +10,16 @@ import time
 # 1. SEMPRE A PRIMEIRA CONFIGURAÇÃO
 st.set_page_config(page_title="Flash Stop", layout="wide")
 
-# 2. ADICIONE O BLOCO AQUI (LOGO NO TOPO)
-st.markdown("""
-    <style>
-    /* Oculta a barra superior inteira (Share, GitHub, etc.) */
-    header[data-testid="stHeader"] {
-        visibility: hidden;
-        height: 0%;
-    }
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Remove o espaço em branco que sobra no topo */
-    .block-container {
-        padding-top: 0rem !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# 2. DEFINA AS FUNÇÕES NO TOPO
+@st.cache_data(ttl=60) # Isso faz o app carregar rápido
+def carregar_dinamico(aba):
+    # Aqui usamos a conexão com o Google Sheets que você já tem
+    try:
+        # Se você estiver usando st.connection:
+        return conn.read(worksheet=aba)
+    except NameError:
+        st.error("A variável 'conn' (conexão) não foi definida antes da função!")
+        return pd.DataFrame()
 
 
 # ==================== 3. DEFINIÇÃO DO MENU (ESSENCIAL) ====================
