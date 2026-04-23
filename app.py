@@ -150,33 +150,77 @@ elif menu == "🛒 Self-Checkout":
                 st.rerun()
     else: st.warning("Nenhum produto cadastrado.")
 
-# --- ENTRADA DE MERCADORIA ---
+# --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
-    st.header("💰 Gestão de Estoque")
+    st.header("💰 Gestão de Estoque e Preços")
     df_p = carregar_dinamico("produtos")
-    
-    if not df_p.empty:
-        prod_sel = st.selectbox("Selecione o Produto:", df_p['nome'].tolist())
-        with st.form("entrada_estoque"):
+
+    # Seletor de modo
+    modo = st.radio("Selecione a operação:", ["Repor Estoque", "Cadastrar Novo Produto"], horizontal=True)
+
+    if modo == "Repor Estoque":
+        if not df_p.empty:
+            prod_sel = st.selectbox("Selecione o Produto:", df_p['nome'].tolist())
+            with st.form("form_reposicao"):
+                c1, c2, c3 = st.columns(3)
+                qtd_chegando = c1.number_input("Qtd Chegando:", min_value=1)
+                custo = c2.number_input("Custo Unitário (R$):", value=0.0)
+                margem = c3.number_input("Margem (%)", value=40.0)
+                
+                validade = st.date_input("Nova Validade:", value=datetime.now() + timedelta(days=90))
+                
+                preco_sugerido = custo * (1 + (margem/100))
+                preco_venda = st.number_input("Confirmar Preço de Venda (R$):", value=preco_sugerido)
+                
+                if st.form_submit_button("Atualizar Produto"):
+                    idx = df_p[df_p['nome'] == prod_sel].index[0]
+                    # Soma ao estoque atual e atualiza preço/validade
+                    df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) + qtd_chegando
+                    df_p.at[idx, 'preco'] = preco_venda
+                    df_p.at[idx, 'validade'] = validade.strftime("%d/%m/%Y")
+                    
+                    conn.update(worksheet="produtos", data=df_p)
+                    st.cache_data.clear()
+                    st.success(f"Estoque de {prod_sel} atualizado!")
+                    time.sleep(1)
+                    st.rerun()
+        else:
+            st.warning("Nenhum produto cadastrado para repor.")
+
+    else:
+        # --- MODO NOVO CADASTRO ---
+        st.subheader("📝 Cadastrar Novo Item no Sistema")
+        with st.form("form_cadastro_novo"):
+            nome_n = st.text_input("Nome do Produto:")
             c1, c2, c3 = st.columns(3)
-            qtd = c1.number_input("Quantidade Chegando:", min_value=1)
-            custo = c2.number_input("Custo Unitário:", value=0.0)
-            margem = c3.number_input("Margem (%)", value=40.0)
-            validade = st.date_input("Data de Validade:", value=datetime.now() + timedelta(days=90))
+            estoque_i = c1.number_input("Estoque Inicial:", min_value=0)
+            custo_i = c2.number_input("Custo de Compra (R$):", value=0.0)
+            margem_i = c3.number_input("Margem Desejada (%)", value=40.0)
             
-            preco_sugerido = custo * (1 + (margem/100))
-            preco_venda = st.number_input("Preço de Venda Final:", value=preco_sugerido)
+            validade_i = st.date_input("Validade:", value=datetime.now() + timedelta(days=90))
             
-            if st.form_submit_button("Atualizar Estoque"):
-                idx = df_p[df_p['nome'] == prod_sel].index[0]
-                df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) + qtd
-                df_p.at[idx, 'preco'] = preco_venda
-                df_p.at[idx, 'validade'] = validade.strftime("%d/%m/%Y")
-                conn.update(worksheet="produtos", data=df_p)
-                st.cache_data.clear()
-                st.success("Dados salvos com sucesso!")
-                time.sleep(1)
-                st.rerun()
+            preco_final_n = custo_i * (1 + (margem_i/100))
+            preco_venda_n = st.number_input("Preço de Venda Final (R$):", value=preco_final_n)
+
+            if st.form_submit_button("Salvar Novo Produto"):
+                if nome_n:
+                    # Cria a nova linha respeitando as colunas do seu Sheets
+                    novo_item = pd.DataFrame([{
+                        "nome": nome_n,
+                        "estoque": estoque_i,
+                        "preco": preco_venda_n,
+                        "validade": validade_i.strftime("%d/%m/%Y"),
+                        "estoque_minimo": 5  # Valor padrão de segurança
+                    }])
+                    
+                    df_atualizado = pd.concat([df_p, novo_item], ignore_index=True)
+                    conn.update(worksheet="produtos", data=df_atualizado)
+                    st.cache_data.clear()
+                    st.success(f"{nome_n} cadastrado com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("O nome do produto é obrigatório.")
 
 # --- INVENTÁRIO ---
 elif menu == "📦 Inventário":
