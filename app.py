@@ -306,7 +306,77 @@ elif menu == "💸 Despesas":
             st.dataframe(df_unidade.tail(10), use_container_width=True, hide_index=True)
     else:
         st.info("Nenhuma despesa registrada ainda.")
+
+# --- ABA CONTABILIDADE ---
+elif menu == "📂 Contabilidade":
+    st.header("📂 Relatórios Contábeis")
+    
+    # Carregamento de dados
+    df_vendas = carregar_dinamico("vendas")
+    df_pontos = carregar_dinamico("pontos")
+    
+    if df_vendas.empty:
+        st.warning("Sem dados de vendas para gerar relatórios.")
+    else:
+        # 1. Filtros de Geração
+        with st.expander("🔍 Filtros do Relatório", expanded=True):
+            col_f1, col_f2, col_f3 = st.columns(3)
+            
+            pdv_sel = col_f1.selectbox("Selecione o PDV:", df_pontos['nome'].tolist())
+            mes_ref = col_f2.selectbox("Mês de Referência:", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"])
+            taxa_adm = col_f3.number_input("Taxa Média Cartão (%):", value=2.5)
+
+        # 2. Processamento de Dados (Filtro por Unidade)
+        df_vendas['valor_bruto'] = pd.to_numeric(df_vendas['valor_bruto'], errors='coerce')
+        df_pdv = df_vendas[df_vendas['unidade'] == pdv_sel].copy()
         
+        # Cálculos Contábeis
+        total_bruto = df_pdv['valor_bruto'].sum()
+        total_taxas = total_bruto * (taxa_adm / 100)
+        total_liquido = total_bruto - total_taxas
+        total_transacoes = len(df_pdv)
+
+        # 3. Visualização do Relatório (Layout de Impressão)
+        st.markdown(f"""
+            <div style="border: 1px solid #ddd; padding: 20px; border-radius: 10px; background-color: white; color: black;">
+                <h2 style="text-align: center; margin-bottom: 0;">FLASH STOP - RELATÓRIO CONTÁBIL</h2>
+                <p style="text-align: center; color: #666;">Unidade: {pdv_sel} | Competência: {mes_ref} 2026</p>
+                <hr>
+                <table style="width: 100%; font-size: 16px;">
+                    <tr><td><b>Faturamento Bruto:</b></td><td style="text-align: right;">R$ {total_bruto:,.2f}</td></tr>
+                    <tr><td><b>Taxas Operacionais (Est.):</b></td><td style="text-align: right; color: red;">- R$ {total_taxas:,.2f}</td></tr>
+                    <tr style="font-size: 20px; border-top: 2px solid #000;">
+                        <td><b>Repasse Líquido:</b></td><td style="text-align: right;"><b>R$ {total_liquido:,.2f}</b></td></tr>
+                </table>
+                <br>
+                <p style="font-size: 12px;">Total de Transações no período: {total_transacoes}</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        st.write("") # Espaçador
+
+        # 4. Botões de Exportação
+        col_ex1, col_ex2 = st.columns(2)
+        
+        # Exportar Excel (Formatado para o Contador)
+        csv = df_pdv.to_csv(index=False).encode('utf-8')
+        col_ex1.download_button(
+            label="💾 Baixar Planilha (CSV)",
+            data=csv,
+            file_name=f"Contabilidade_FlashStop_{pdv_sel}_{mes_ref}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+        # Botão de Impressão (Aciona o comando de impressão do navegador)
+        if col_ex2.button("🖨️ Imprimir / Gerar PDF", use_container_width=True):
+            st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+            st.info("Use a opção 'Salvar como PDF' na tela de impressão que abriu.")
+
+        # Exibição analítica para conferência rápida
+        with st.expander("Visualizar Detalhamento de Vendas"):
+            st.dataframe(df_pdv, use_container_width=True, hide_index=True)
+            
 # --- CONFIGURAÇÕES ---
 elif menu == "📟 Configurações":
     st.header("📟 Configurações do Sistema")
