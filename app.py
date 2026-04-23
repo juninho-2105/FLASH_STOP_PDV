@@ -157,6 +157,12 @@ if menu == "📊 Dashboard":
                 st.success("✅ Nenhuma validade crítica encontrada!")
 
     # --- PARTE C: GRÁFICO RÁPIDO ---
+if not df_v.empty:
+        st.divider()
+        st.subheader("📈 Tendência de Vendas (Geral)")
+        df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
+        vendas_dia = df_v.groupby('data')['valor_bruto'].sum()
+        st.area_chart(vendas_dia)
 
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
