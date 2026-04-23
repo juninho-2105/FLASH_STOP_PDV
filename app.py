@@ -77,7 +77,7 @@ if st.sidebar.button("🚪 Sair"):
 
 # ==================== 4. LÓGICA DAS TELAS ====================
 
-# ==================== DASHBOARD & ALERTAS INTEGRADO ====================
+# --- DASHBOARD REVISADO COM CASHBACK E ALERTAS ---
 if menu == "📊 Dashboard":
     st.header("📊 Painel de Controle Flash Stop")
     
@@ -89,81 +89,72 @@ if menu == "📊 Dashboard":
     # --- PARTE A: MÉTRICAS FINANCEIRAS ---
     st.subheader("💰 Resumo Financeiro")
     if not df_v.empty:
+        # Tratamento de dados numéricos
         df_v['valor_bruto'] = pd.to_numeric(df_v['valor_bruto'], errors='coerce').fillna(0)
         df_v['valor_liquido'] = pd.to_numeric(df_v['valor_liquido'], errors='coerce').fillna(0)
         
-        # Cálculos
-        bruto = df_v['valor_bruto'].sum()
-        liquido = df_v['valor_liquido'].sum()
+        # Cálculos Principais
+        bruto_total = df_v['valor_bruto'].sum()
+        liquido_cartao = df_v['valor_liquido'].sum() # Valor que a máquina de cartão repassa
         
+        # Cálculo do Cashback (2% sobre o Bruto)
+        cashback_total = bruto_total * 0.02
+        
+        # Cálculo de Despesas
         gastos = 0.0
         if not df_d.empty and 'valor' in df_d.columns:
             df_d['valor'] = pd.to_numeric(df_d['valor'], errors='coerce').fillna(0)
             gastos = df_d['valor'].sum()
 
-        lucro_real = liquido - gastos
+        # Lucro Real Final (Líquido da máquina - Despesas - Cashback)
+        lucro_final = liquido_cartao - gastos - cashback_total
 
-        # Exibição das Métricas em 4 colunas
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
-        m2.metric("Líquido (Pós Taxas)", f"R$ {liquido:,.2f}")
-        m3.metric("Despesas Totais", f"R$ {gastos:,.2f}")
-        m4.metric("Lucro Real", f"R$ {lucro_real:,.2f}")
+        # Exibição das Métricas
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Faturamento Bruto", f"R$ {bruto_total:,.2f}")
+        m2.metric("Despesas", f"R$ {gastos:,.2f}")
+        m3.metric("Cashback (2%)", f"R$ {cashback_total:,.2f}", delta_color="inverse")
+        m4.metric("Líquido Cartão", f"R$ {liquido_cartao:,.2f}")
+        m5.metric("Lucro Real", f"R$ {lucro_final:,.2f}")
+
+        # --- GRÁFICO DE VENDAS DIÁRIAS ---
+        st.divider()
+        st.subheader("📈 Evolução de Vendas Diárias")
+        df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
+        # Agrupa vendas por dia
+        vendas_diarias = df_v.groupby(df_v['data'].dt.date)['valor_bruto'].sum()
+        st.area_chart(vendas_diarias)
+
     else:
-        st.info("Aguardando dados de vendas para métricas financeiras.")
+        st.info("Aguardando dados de vendas para gerar o painel financeiro.")
 
     st.divider()
 
-    # --- PARTE B: ALERTAS OPERACIONAIS (ESTOQUE E VALIDADE) ---
+    # --- PARTE B: ALERTAS OPERACIONAIS ---
     st.subheader("🚨 Alertas de Operação")
-    
-    if df_p.empty:
-        st.info("💡 Cadastre produtos na aba 'Gestão de Estoque' para ativar os alertas.")
-    else:
+    if not df_p.empty:
         col_estoque, col_validade = st.columns(2)
 
         with col_estoque:
-            st.markdown("### ⚠️ Estoque Baixo")
-            # Converte estoque para número
+            st.markdown("#### ⚠️ Estoque Crítico (< 5 un)")
             df_p['estoque'] = pd.to_numeric(df_p['estoque'], errors='coerce').fillna(0)
-            # Define o limite de 5 unidades conforme solicitado
             baixo = df_p[df_p['estoque'] < 5]
-            
             if not baixo.empty:
                 for _, r in baixo.iterrows():
-                    st.error(f"**Repor:** {r['nome']} | Restam: {int(r['estoque'])} un")
+                    st.error(f"**{r['nome']}**: {int(r['estoque'])} unidades")
             else:
-                st.success("✅ Todos os itens com estoque em dia!")
+                st.success("Estoque normal.")
 
         with col_validade:
-            st.markdown("### 📅 Alerta de Validade")
-            # Converte para data tratando erros
+            st.markdown("#### 📅 Validades")
             df_p['validade_dt'] = pd.to_datetime(df_p['validade'], dayfirst=True, errors='coerce')
             hoje = datetime.now()
-            
-            # Produtos vencidos ou que vencem em 7 dias
             vencidos = df_p[df_p['validade_dt'] < hoje]
-            vencendo_logo = df_p[(df_p['validade_dt'] >= hoje) & (df_p['validade_dt'] <= hoje + timedelta(days=7))]
-
             if not vencidos.empty:
                 for _, r in vencidos.iterrows():
                     st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
-            
-            if not vencendo_logo.empty:
-                for _, r in vencendo_logo.iterrows():
-                    st.warning(f"**Vence em breve:** {r['nome']} ({r['validade']})")
-            
-            if vencidos.empty and vencendo_logo.empty:
-                st.success("✅ Nenhuma validade crítica encontrada!")
-
-    # --- PARTE C: GRÁFICO RÁPIDO ---
-if not df_v.empty:
-        st.divider()
-        st.subheader("📈 Tendência de Vendas (Geral)")
-        df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
-        vendas_dia = df_v.groupby('data')['valor_bruto'].sum()
-        st.area_chart(vendas_dia)
-
+            else:
+                st.success("T
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
     st.header("🛒 Checkout")
