@@ -196,34 +196,44 @@ if menu == "📊 Dashboard":
         else:
             st.success("Nenhum produto próximo ao vencimento!")
 
-# ==================== 5. SELF-CHECKOUT OTIMIZADO ====================
+# ==================== 5. SELF-CHECKOUT PROFISSIONAL ====================
 elif menu == "🛒 Self-Checkout":
-    # CSS para comprimir espaços e estilizar botões
+    # CSS Avançado para interface mobile/unattended
     st.markdown("""
         <style>
-        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
-        .stSelectbox { margin-bottom: -20px; }
-        .stButton>button { height: 45px; border-radius: 8px; font-weight: bold; }
-        div[data-testid="stVerticalBlock"] > div { min-height: 0px !important; }
+        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
+        .stSelectbox div[data-baseweb="select"] { min-height: 40px; }
+        
+        /* Estilização dos Cards de Produto */
+        .product-card {
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 5px solid #2e7d32;
+        }
+        .product-name { font-weight: bold; font-size: 16px; margin-bottom: 2px; }
+        .product-price { color: #555; font-size: 14px; }
+        
+        /* Ajuste de Botões de Quantidade */
+        div[data-testid="column"] button {
+            padding: 5px !important;
+            height: 35px !important;
+            width: 35px !important;
+            border-radius: 50% !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. LOGO COMPACTO
-    col_l1, col_l2, col_l3 = st.columns([1, 0.8, 1])
-    with col_l2:
-        try:
-            st.image("logo_flash_stop.png", use_container_width=True)
-        except:
-            st.markdown("<h3 style='text-align: center; color: #2e7d32; margin-top:-10px;'>FLASH STOP</h3>", unsafe_allow_html=True)
+    # 1. CABEÇALHO COMPACTO
+    st.markdown("<h2 style='text-align: center; color: #2e7d32; margin-bottom: 15px;'>FLASH STOP</h2>", unsafe_allow_html=True)
 
-    # 2. SELEÇÃO E ADIÇÃO NA MESMA LINHA
+    # 2. SELEÇÃO DE PRODUTO (Busca e Add na mesma linha)
     df_p = carregar_dinamico("produtos")
-    df_p.columns = df_p.columns.str.strip()
-    
-    c_busca, c_add = st.columns([2.5, 1])
+    c_busca, c_add = st.columns([3, 1])
     
     with c_busca:
-        p_nome = st.selectbox("Bipe ou Selecione:", [""] + df_p['nome'].tolist(), label_visibility="collapsed")
+        p_nome = st.selectbox("Escolha o produto:", [""] + df_p['nome'].tolist(), label_visibility="collapsed")
 
     with c_add:
         if st.button("➕ ADD", use_container_width=True, type="primary"):
@@ -233,50 +243,52 @@ elif menu == "🛒 Self-Checkout":
                 st.session_state.carrinho.append({"id": time.time(), "produto": p_nome, "preco": preco_unit})
                 st.rerun()
 
-    # 3. LISTA DO CARRINHO (Mais compacta)
+    st.divider()
+
+    # 3. ÁREA DO CARRINHO
     if st.session_state.carrinho:
         df_cart = pd.DataFrame(st.session_state.carrinho)
         resumo = df_cart.groupby('produto').agg({'preco': 'first', 'id': 'count'}).rename(columns={'id': 'qtd'}).reset_index()
 
         for idx, item in resumo.iterrows():
-            col_item, col_qtd = st.columns([2, 1.2])
-            with col_item:
-                st.markdown(f"<p style='margin-bottom:0;'><b>{item['produto']}</b><br>R$ {item['preco']*item['qtd']:.2f}</p>", unsafe_allow_html=True)
-            with col_qtd:
-                m1, m2, m3 = st.columns([1, 1, 1])
-                if m1.button("—", key=f"min_{idx}"):
+            # Layout de Cartão para o Produto
+            with st.container():
+                st.markdown(f"""
+                    <div class="product-card">
+                        <div class="product-name">{item['produto']}</div>
+                        <div class="product-price">Un: R$ {item['preco']:.2f} | Total: R$ {item['preco']*item['qtd']:.2f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Controles de Quantidade logo abaixo do texto
+                q1, q2, q3, q4 = st.columns([1, 1, 1, 5]) # Colunas vazias no final para empurrar os botões
+                if q1.button("—", key=f"min_{idx}"):
                     for i, p in enumerate(st.session_state.carrinho):
                         if p['produto'] == item['produto']:
                             st.session_state.carrinho.pop(i)
                             break
                     st.rerun()
-                m2.markdown(f"<p style='text-align:center; margin-top:10px;'>{item['qtd']}</p>", unsafe_allow_html=True)
-                if m3.button("＋", key=f"plus_{idx}"):
+                q2.markdown(f"<p style='text-align:center; font-weight:bold; font-size:18px;'>{item['qtd']}</p>", unsafe_allow_html=True)
+                if q3.button("＋", key=f"plus_{idx}"):
                     st.session_state.carrinho.append({"id": time.time(), "produto": item['produto'], "preco": item['preco']})
                     st.rerun()
 
-        st.divider()
+        # 4. FINALIZAÇÃO (Fixa na parte inferior visualmente)
         v_total = df_cart['preco'].sum()
+        st.markdown(f"<h1 style='text-align:center; margin-top:20px;'>Total: R$ {v_total:.2f}</h1>", unsafe_allow_html=True)
         
-        # 4. FORMAS DE PAGAMENTO E FINALIZAÇÃO
-        st.markdown(f"<h2 style='text-align:center; margin:0;'>Total: R$ {v_total:.2f}</h2>", unsafe_allow_html=True)
-        
-        # Seleção da forma de pagamento
-        forma_pgto = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+        forma_pgto = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
         
         col_canc, col_pag = st.columns(2)
-        if col_canc.button("❌ CANCELAR", use_container_width=True):
-            st.session_state.carrinho = []
-            st.rerun()
-            
+        col_canc.button("❌ CANCELAR", use_container_width=True)
         if col_pag.button("🚀 FINALIZAR", use_container_width=True, type="primary"):
-            # Aqui você adicionaria a lógica para salvar na aba 'vendas'
-            st.success(f"Pago via {forma_pgto}!")
-            time.sleep(1)
+            st.balloons()
+            st.success("Venda realizada!")
             st.session_state.carrinho = []
+            time.sleep(2)
             st.rerun()
     else:
-        st.info("Carrinho vazio")
+        st.info("Aguardando bip ou seleção de produto...")
 
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
 elif menu == "💸 Despesas":
