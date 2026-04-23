@@ -3,51 +3,31 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
+import streamlit as st
+import pandas as pd
+import time
 
-# ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
-st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
+# 1. SEMPRE A PRIMEIRA CONFIGURAÇÃO
+st.set_page_config(page_title="Flash Stop", layout="wide")
 
-# Inicialização de Estados de Sessão
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-if 'carrinho' not in st.session_state:
-    st.session_state.carrinho = []
-if 'unidade' not in st.session_state:
-    st.session_state.unidade = ""
-if 'perfil' not in st.session_state:
-    st.session_state.perfil = ""
+# 2. ADICIONE O BLOCO AQUI (LOGO NO TOPO)
+st.markdown("""
+    <style>
+    /* Oculta a barra superior inteira (Share, GitHub, etc.) */
+    header[data-testid="stHeader"] {
+        visibility: hidden;
+        height: 0%;
+    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Remove o espaço em branco que sobra no topo */
+    .block-container {
+        padding-top: 0rem !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Conexão com Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-def carregar_dinamico(aba):
-    return conn.read(worksheet=aba, ttl=0)
-
-# ==================== 2. SISTEMA DE LOGIN ====================
-if not st.session_state.autenticado:
-    st.title("⚡ Flash Stop - Acesso")
-    with st.form("login_form"):
-        user = st.text_input("Usuário / PDV")
-        senha = st.text_input("Senha", type="password")
-        if st.form_submit_button("Entrar", use_container_width=True):
-            df_pts = carregar_dinamico("pontos")
-            if user == "admin" and senha == "flash123":
-                st.session_state.autenticado = True
-                st.session_state.unidade = "Administração"
-                st.session_state.perfil = "admin"
-                st.rerun()
-            elif user in df_pts['nome'].values:
-                senha_correta = str(df_pts[df_pts['nome'] == user]['senha'].values[0])
-                if senha == senha_correta:
-                    st.session_state.autenticado = True
-                    st.session_state.unidade = user
-                    st.session_state.perfil = "pdv"
-                    st.rerun()
-                else:
-                    st.error("Senha incorreta.")
-            else:
-                st.error("Usuário não encontrado.")
-    st.stop()
 
 # ==================== 3. DEFINIÇÃO DO MENU (ESSENCIAL) ====================
 # Este bloco cria a variável 'menu' que os IFs abaixo vão usar
