@@ -95,25 +95,21 @@ if menu == "📊 Dashboard":
         
         # Cálculos Principais
         bruto_total = df_v['valor_bruto'].sum()
-        liquido_cartao = df_v['valor_liquido'].sum() # Valor que a máquina de cartão repassa
-        
-        # Cálculo do Cashback (2% sobre o Bruto)
+        liquido_cartao = df_v['valor_liquido'].sum()
         cashback_total = bruto_total * 0.02
         
-        # Cálculo de Despesas
         gastos = 0.0
         if not df_d.empty and 'valor' in df_d.columns:
             df_d['valor'] = pd.to_numeric(df_d['valor'], errors='coerce').fillna(0)
             gastos = df_d['valor'].sum()
 
-        # Lucro Real Final (Líquido da máquina - Despesas - Cashback)
         lucro_final = liquido_cartao - gastos - cashback_total
 
         # Exibição das Métricas
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Faturamento Bruto", f"R$ {bruto_total:,.2f}")
         m2.metric("Despesas", f"R$ {gastos:,.2f}")
-        m3.metric("Cashback (2%)", f"R$ {cashback_total:,.2f}", delta_color="inverse")
+        m3.metric("Cashback (2%)", f"R$ {cashback_total:,.2f}")
         m4.metric("Líquido Cartão", f"R$ {liquido_cartao:,.2f}")
         m5.metric("Lucro Real", f"R$ {lucro_final:,.2f}")
 
@@ -121,10 +117,8 @@ if menu == "📊 Dashboard":
         st.divider()
         st.subheader("📈 Evolução de Vendas Diárias")
         df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
-        # Agrupa vendas por dia
         vendas_diarias = df_v.groupby(df_v['data'].dt.date)['valor_bruto'].sum()
         st.area_chart(vendas_diarias)
-
     else:
         st.info("Aguardando dados de vendas para gerar o painel financeiro.")
 
@@ -143,7 +137,7 @@ if menu == "📊 Dashboard":
                 for _, r in baixo.iterrows():
                     st.error(f"**{r['nome']}**: {int(r['estoque'])} unidades")
             else:
-                st.success("Estoque normal.")
+                st.success("Estoque em conformidade.")
 
         with col_validade:
             st.markdown("#### 📅 Validades")
@@ -154,7 +148,9 @@ if menu == "📊 Dashboard":
                 for _, r in vencidos.iterrows():
                     st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
             else:
-                st.success("T
+                st.success("Produtos dentro do prazo.")
+    else:
+        st.info("Nenhum produto cadastrado para monitoramento.")
                            
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
