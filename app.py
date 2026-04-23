@@ -124,31 +124,48 @@ if menu == "📊 Dashboard":
 
     st.divider()
 
-    # --- PARTE B: ALERTAS OPERACIONAIS ---
+  # --- PARTE B: ALERTAS OPERACIONAIS (DINÂMICOS) ---
     st.subheader("🚨 Alertas de Operação")
     if not df_p.empty:
         col_estoque, col_validade = st.columns(2)
 
         with col_estoque:
-            st.markdown("#### ⚠️ Estoque Crítico (< 5 un)")
+            st.markdown("#### ⚠️ Estoque Crítico (Limite Personalizado)")
+            
+            # Garante que as colunas sejam numéricas para a comparação
             df_p['estoque'] = pd.to_numeric(df_p['estoque'], errors='coerce').fillna(0)
-            baixo = df_p[df_p['estoque'] < 5]
+            if 'estoque_minimo' not in df_p.columns:
+                df_p['estoque_minimo'] = 5 # Valor reserva caso a coluna não exista
+            else:
+                df_p['estoque_minimo'] = pd.to_numeric(df_p['estoque_minimo'], errors='coerce').fillna(5)
+
+            # FILTRO CRÍTICO: Compara o estoque com o limite definido no inventário
+            baixo = df_p[df_p['estoque'] <= df_p['estoque_minimo']]
+            
             if not baixo.empty:
                 for _, r in baixo.iterrows():
-                    st.error(f"**{r['nome']}**: {int(r['estoque'])} unidades")
+                    st.error(f"**{r['nome']}**: {int(r['estoque'])} un (Mínimo: {int(r['estoque_minimo'])})")
             else:
-                st.success("Estoque em conformidade.")
+                st.success("✅ Todos os produtos acima do limite mínimo.")
 
         with col_validade:
             st.markdown("#### 📅 Validades")
             df_p['validade_dt'] = pd.to_datetime(df_p['validade'], dayfirst=True, errors='coerce')
             hoje = datetime.now()
+            
             vencidos = df_p[df_p['validade_dt'] < hoje]
+            vencendo_em_breve = df_p[(df_p['validade_dt'] >= hoje) & (df_p['validade_dt'] <= hoje + timedelta(days=7))]
+
             if not vencidos.empty:
                 for _, r in vencidos.iterrows():
                     st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
-            else:
-                st.success("Produtos dentro do prazo.")
+            
+            if not vencendo_em_breve.empty:
+                for _, r in vencendo_em_breve.iterrows():
+                    st.warning(f"**Vence em 7 dias:** {r['nome']} ({r['validade']})")
+            
+            if vencidos.empty and vencendo_em_breve.empty:
+                st.success("✅ Validades em dia.")
     else:
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
