@@ -623,59 +623,65 @@ elif menu == "📟 Configurações":
     
     aba_pdv, aba_maquinas = st.tabs(["📍 Pontos de Venda (PDVs)", "💳 Máquinas e Taxas"])
 
-    with aba_pdv:
-        st.subheader("Gestão de Acessos")
-        df_pts = carregar_dinamico("pontos")
-        
-        with st.form("novo_p"):
-            n = st.text_input("Nome da Unidade (ex: Condomínio Alpha)")
-            s = st.text_input("Senha de Acesso")
-            if st.form_submit_button("Cadastrar Unidade"):
-                if n and s:
-                    novo = pd.DataFrame([{"nome": n, "senha": s}])
-                    conn.update(worksheet="pontos", data=pd.concat([df_pts, novo], ignore_index=True))
-                    st.cache_data.clear()
-                    st.success("Unidade cadastrada!")
-                    st.rerun()
-        
-        st.dataframe(df_pts, use_container_width=True, hide_index=True)
+    # ... (Mantenha o código da aba_pdv como está) ...
 
     with aba_maquinas:
-        st.subheader("Configuração de Operadoras de Pagamento")
-        st.info("As taxas abaixo serão usadas para calcular o lucro líquido real de cada venda.")
+        st.subheader("Configuração de Operadoras por Unidade")
+        st.info("Vincule uma máquina a um PDV para que o lucro líquido seja calculado com as taxas corretas daquela unidade.")
         
+        # Carregar PDVs existentes para o vínculo
+        df_pts = carregar_dinamico("pontos")
+        lista_pdvs = df_pts['nome'].tolist()
+
         try:
             df_maq = carregar_dinamico("maquinas")
         except:
-            # Estrutura com taxas separadas
-            df_maq = pd.DataFrame(columns=["maquina", "taxa_pix", "taxa_debito", "taxa_credito"])
+            # Estrutura com a nova coluna 'pdv_vinculado'
+            df_maq = pd.DataFrame(columns=["pdv_vinculado", "maquina", "taxa_pix", "taxa_debito", "taxa_credito"])
 
-        with st.form("nova_maquina"):
-            nome_m = st.text_input("Nome da Operadora/Máquina (ex: Stone, Mercado Pago):")
+        with st.form("nova_maquina", clear_on_submit=True):
+            # NOVO CAMPO: Seleção do PDV
+            pdv_vinc = st.selectbox("Vincular esta máquina ao PDV:", options=lista_pdvs)
+            
+            nome_m = st.text_input("Nome da Operadora (ex: Stone, PagSeguro):")
             
             c1, c2, c3 = st.columns(3)
             t_pix = c1.number_input("Taxa Pix (%)", min_value=0.0, value=0.0, step=0.01)
             t_deb = c2.number_input("Taxa Débito (%)", min_value=0.0, value=1.99, step=0.01)
             t_cre = c3.number_input("Taxa Crédito (%)", min_value=0.0, value=3.49, step=0.01)
             
-            if st.form_submit_button("🚀 SALVAR CONFIGURAÇÃO DE TAXAS"):
-                if nome_m:
+            if st.form_submit_button("🚀 SALVAR E VINCULAR TAXAS"):
+                if nome_m and pdv_vinc:
+                    # Criar nova configuração com o PDV
                     nova_config = pd.DataFrame([{
+                        "pdv_vinculado": pdv_vinc, 
                         "maquina": nome_m, 
                         "taxa_pix": t_pix, 
                         "taxa_debito": t_deb, 
                         "taxa_credito": t_cre
                     }])
-                    # Atualiza ou adiciona
+                    
+                    # Se o PDV já tiver uma máquina, removemos a antiga antes de adicionar a nova (evita duplicidade)
+                    if not df_maq.empty and pdv_vinc in df_maq['pdv_vinculado'].values:
+                        df_maq = df_maq[df_maq['pdv_vinculado'] != pdv_vinc]
+
                     df_maq_final = pd.concat([df_maq, nova_config], ignore_index=True)
-                    conn.update(worksheet="maquinas", data=df_maq_final)
-                    st.cache_data.clear()
-                    st.success(f"Taxas da {nome_m} configuradas!")
-                    time.sleep(1)
-                    st.rerun()
+                    
+                    with st.spinner("Vinculando máquina..."):
+                        conn.update(worksheet="maquinas", data=df_maq_final)
+                        st.cache_data.clear()
+                        st.success(f"Máquina {nome_m} vinculada ao {pdv_vinc}!")
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.error("Preencha o nome da operadora e selecione um PDV.")
 
         if not df_maq.empty:
             st.divider()
-            st.write("### Taxas Ativas")
-            # Exibe com formatação de porcentagem
-            st.dataframe(df_maq, use_container_width=True, hide_index=True)
+            st.write("### Máquinas Vinculadas por Unidade")
+            # Exibe a tabela organizada
+            st.dataframe(
+                df_maq.sort_values("pdv_vinculado"), 
+                use_container_width=True, 
+                hide_index=True
+            )
