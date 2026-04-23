@@ -170,49 +170,20 @@ if menu == "📊 Dashboard":
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
 
-# ==================== NAVEGAÇÃO DE TELAS ====================
-# --- LOGO ESTILIZADA (Verde Limão e Raio Preto) ---
-st.markdown("""
-    <style>
-    .flash-header {
-        text-align: center; 
-        background-color: #32CD32; 
-        padding: 15px; 
-        border-radius: 12px;
-        margin-bottom: 25px;
-        border: 2px solid black;
-    }
-    .flash-title {
-        color: black; 
-        font-weight: 800;
-        font-size: 45px;
-        font-family: 'Arial Black', Gadget, sans-serif;
-    }
-    </style>
-    <div class="flash-header">
-        <span class="flash-title">⚡ Flash Stop</span>
-    </div>
-""", unsafe_allow_html=True)
-if menu == "📊 Dashboard":
-    # (Mantenha seu código do Dashboard aqui)
-    pass
-
+# --- SELF-CHECKOUT PERSONALIZADO ---
 elif menu == "🛒 Self-Checkout":
+    # Título da Marca no Topo
+    st.markdown("<h1 style='text-align: center; color: #FFD700;'>⚡ Flash Stop</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Terminal de Autoatendimento</h3>", unsafe_allow_html=True)
     
-    # 1. Carregamento e Tratamento de Preços (Correção de Leitura)
     df_p = carregar_dinamico("produtos")
     
     if not df_p.empty:
-        # Conversão forçada para evitar erro de preço no inventário
-        df_p['preco'] = pd.to_numeric(df_p['preco'].astype(str).str.replace(',', '.'), errors='coerce').fillna(0.0)
-        
-        # Campo de entrada otimizado para o leitor
-        p_entrada = st.selectbox("Passe o produto no leitor:", 
+        # Campo de entrada para o leitor de código de barras ou seleção manual
+        p_entrada = st.selectbox("Passe o produto no leitor ou selecione:", 
                                  [""] + df_p['nome'].tolist(), 
                                  key="entrada_bip")
 
-        # Lógica de resposta rápida (Bipou-Pagou)
         if p_entrada:
             item_dados = df_p[df_p['nome'] == p_entrada].iloc[0]
             st.session_state.carrinho.append({
@@ -220,25 +191,28 @@ elif menu == "🛒 Self-Checkout":
                 "preco": float(item_dados['preco']),
                 "unidade": st.session_state.unidade
             })
-            st.toast(f"✅ {p_entrada} adicionado!")
-            time.sleep(0.1) # Delay mínimo para o leitor processar
+            st.toast(f"✅ {p_entrada} adicionado!", icon="🛒")
+            time.sleep(0.5)
             st.rerun()
 
         st.divider()
 
-        # 2. Resumo do Carrinho
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
             resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
 
             for idx, row in resumo.iterrows():
-                c_item, c_sub = st.columns([5, 1])
-                c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f})")
+                c_item, c_sub, c_add = st.columns([4, 1, 1])
+                c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f}/un)")
+                
                 if c_sub.button("—", key=f"btn_sub_{idx}"):
                     for i, p in enumerate(st.session_state.carrinho):
                         if p['produto'] == row['produto']:
                             st.session_state.carrinho.pop(i)
                             break
+                    st.rerun()
+                if c_add.button("+", key=f"btn_add_{idx}"):
+                    st.session_state.carrinho.append({"produto": row['produto'], "preco": row['preco'], "unidade": st.session_state.unidade})
                     st.rerun()
 
             total_venda = df_cart['preco'].sum()
@@ -246,43 +220,44 @@ elif menu == "🛒 Self-Checkout":
             
             forma = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
 
-            # 3. Botões Finalizadores Empilhados e Centralizados
-            st.write("") 
-            if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
-                # Registro da venda e baixa de estoque
-                nova_venda = pd.DataFrame([{
-                    "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                    "unidade": st.session_state.unidade,
-                    "valor_bruto": total_venda,
-                    "valor_liquido": total_venda * 0.97, # Ajuste conforme sua taxa real
-                    "forma_pgto": forma
-                }])
-                
-                # Baixa automática no estoque
-                for item in st.session_state.carrinho:
-                    idx_p = df_p[df_p['nome'] == item['produto']].index[0]
-                    df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
+            # Centralização dos botões empilhados
+            st.write("") # Espaçador
+            col_central, _ = st.columns([2, 1]) # Gambiarra leve para centralização ou use CSS
+            
+            # Usando CSS para garantir que os botões ocupem a largura e fiquem um sobre o outro
+            with st.container():
+                # Botão Finalizar Compra (Topo)
+                if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
+                    # Lógica de salvamento...
+                    nova_venda = pd.DataFrame([{
+                        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "unidade": st.session_state.unidade,
+                        "valor_bruto": total_venda,
+                        "valor_liquido": total_venda * 0.97,
+                        "forma_pgto": forma
+                    }])
+                    
+                    for item in st.session_state.carrinho:
+                        idx_p = df_p[df_p['nome'] == item['produto']].index[0]
+                        df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
 
-                # Salva no Google Sheets
-                conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), nova_venda], ignore_index=True))
-                conn.update(worksheet="produtos", data=df_p)
+                    conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), nova_venda], ignore_index=True))
+                    conn.update(worksheet="produtos", data=df_p)
+                    
+                    st.session_state.carrinho = []
+                    st.success("Compra Finalizada com Sucesso!")
+                    st.balloons()
+                    time.sleep(2)
+                    st.rerun()
                 
-                st.session_state.carrinho = []
-                st.success("Compra Finalizada com Sucesso!")
-                st.balloons()
-                time.sleep(1.2)
-                st.rerun()
-                
-            if st.button("❌ CANCELAR COMPRA", use_container_width=True):
-                st.session_state.carrinho = []
-                st.rerun()
+                # Botão Cancelar Compra (Baixo)
+                if st.button("❌ CANCELAR COMPRA", use_container_width=True):
+                    st.session_state.carrinho = []
+                    st.rerun()
         else:
             st.info("Aguardando bipagem de produtos...")
-
-# Se houver outros elif (como Inventário, etc), eles devem seguir abaixo:
-elif menu == "📦 Inventário":
-    pass
-
+    else:
+        st.warning("Cadastre produtos no inventário antes de abrir o checkout.")
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
     st.header("💰 Gestão de Estoque e Preços")
