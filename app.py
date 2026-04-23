@@ -198,57 +198,61 @@ if menu == "📊 Dashboard":
 
 # ==================== 5. SELF-CHECKOUT PROFISSIONAL V2 ====================
 elif menu == "🛒 Self-Checkout":
-    # CSS para ajuste de layout e centralização
+    # CSS para ajuste de layout, centralização e evitar cortes
     st.markdown("""
         <style>
         .block-container { padding-top: 1rem; padding-left: 1rem; padding-right: 1rem; }
         
-        /* Ajuste do Título para não cortar */
+        /* Título FLASH STOP sem quebras e centralizado */
         .main-title {
             text-align: center; 
             color: #2e7d32; 
             font-size: 28px; 
             font-weight: bold;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             white-space: nowrap;
         }
 
-        /* Estilo dos botões de ação */
+        /* Estilo dos botões de ação ocupando largura total */
         .stButton button {
             width: 100%;
             border-radius: 10px;
-            height: 3rem;
+            height: 3.5rem;
             font-size: 18px;
+            font-weight: bold;
         }
 
-        /* Card de produto mais harmônico */
+        /* Card de produto para garantir leitura do nome */
         .product-card {
             background-color: #ffffff;
-            border: 1px solid #ddd;
+            border: 1px solid #eee;
+            border-left: 5px solid #2e7d32;
             border-radius: 8px;
             padding: 12px;
             margin-bottom: 5px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
         }
         
-        /* Centralização do Radio (Formas de Pagamento) */
+        /* Centralização das opções de pagamento */
         div[role="radiogroup"] {
             justify-content: center;
-            gap: 20px;
+            gap: 15px;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. TÍTULO (Garantindo que não corte)
+    # 1. TÍTULO
     st.markdown('<div class="main-title">FLASH STOP</div>', unsafe_allow_html=True)
 
-    # 2. SELEÇÃO DE PRODUTO
+    # 2. SELEÇÃO DE PRODUTO (Busca e Botão ADD)
     df_p = carregar_dinamico("produtos")
-    c_busca, c_add = st.columns([3, 1])
+    c_busca, c_add = st.columns([3, 1.2])
     
     with c_busca:
         p_nome = st.selectbox("Produto", [""] + df_p['nome'].tolist(), label_visibility="collapsed")
     with c_add:
-        if st.button("➕ ADD", type="primary"):
+        # Botão ADD corrigido
+        if st.button("➕ ADD", type="primary", key="btn_add_carrinho"):
             if p_nome:
                 dados_p = df_p[df_p['nome'] == p_nome].iloc[0]
                 preco_unit = float(dados_p['preco_venda'] if 'preco_venda' in df_p.columns else dados_p['preco'])
@@ -257,7 +261,7 @@ elif menu == "🛒 Self-Checkout":
 
     st.divider()
 
-    # 3. CARRINHO DE COMPRAS
+    # 3. LISTAGEM DO CARRINHO
     if st.session_state.carrinho:
         df_cart = pd.DataFrame(st.session_state.carrinho)
         resumo = df_cart.groupby('produto').agg({'preco': 'first', 'id': 'count'}).rename(columns={'id': 'qtd'}).reset_index()
@@ -265,36 +269,22 @@ elif menu == "🛒 Self-Checkout":
         for idx, item in resumo.iterrows():
             st.markdown(f"""
                 <div class="product-card">
-                    <b>{item['produto']}</b><br>
-                    <span style='color: #666;'>{item['qtd']}x R$ {item['preco']:.2f} = R$ {item['preco']*item['qtd']:.2f}</span>
+                    <span style='font-size: 16px;'><b>{item['produto']}</b></span><br>
+                    <span style='color: #666;'>{item['qtd']}x R$ {item['preco']:.2f} = <b>R$ {item['preco']*item['qtd']:.2f}</b></span>
                 </div>
             """, unsafe_allow_html=True)
             
-            # Botões de ajuste de quantidade discretos abaixo do card
-            q1, q2, q3, q_espaco = st.columns([1, 1, 1, 4])
+            # Botões de ajuste (+ e -) abaixo do card
+            q1, q2, q3, q_esp = st.columns([1, 1, 1, 4])
             if q1.button("—", key=f"m_{idx}"):
                 for i, p in enumerate(st.session_state.carrinho):
                     if p['produto'] == item['produto']:
                         st.session_state.carrinho.pop(i)
                         break
                 st.rerun()
-            q2.markdown(f"<p style='text-align:center; font-size:18px;'>{item['qtd']}</p>", unsafe_allow_html=True)
+            q2.markdown(f"<p style='text-align:center; font-size:18px; margin-top:5px;'>{item['qtd']}</p>", unsafe_allow_html=True)
             if q3.button("＋", key=f"p_{idx}"):
-                st.session_state.carrinho.append({"id": time.time(), "produto": item['produto'], "preco": item['preco']})
-                st.rerun()
-
-        # 4. ÁREA DE PAGAMENTO (RODAPÉ)
-        st.divider()
-        v_total = df_cart['preco'].sum()
-        st.markdown(f"<h1 style='text-align:center; margin-bottom:10px;'>R$ {v_total:.2f}</h1>", unsafe_allow_html=True)
-        
-        # Pagamento acima dos botões
-        st.markdown("<p style='text-align:center; margin-bottom:-10px;'>Forma de Pagamento:</p>", unsafe_allow_html=True)
-        forma_pgto = st.radio("", ["Pix", "Débito", "Crédito"], horizontal=True, label_visibility="collapsed")
-        
-        # Botões Empilhados e Centralizados
-        st.write("") # Espaçador
-        if st.button
+                st.session_state.carrinho.append({"id": time.time(), "produto": item['produto'],
 
 # ==================== 6. GESTÃO DE DESPESAS (CUSTOS FIXOS/VARIÁVEIS) ====================
 elif menu == "💸 Despesas":
