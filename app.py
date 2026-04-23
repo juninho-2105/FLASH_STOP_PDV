@@ -77,30 +77,66 @@ if st.sidebar.button("🚪 Sair"):
 
 # ==================== 4. LÓGICA DAS TELAS ====================
 
-# ---DASHBOARD E ALERTAS ---
-if menu == "📊 Dashboard & Alertas":
-    st.header("📊 Painel de Controle")
-    produtos = carregar_aba("produtos")
+# --- DASHBOARD REVISADO ---
+if menu == "📊 Dashboard":
+    st.header("📊 Performance Financeira")
     
-    if produtos.empty:
-        st.info("💡 Cadastre produtos na aba 'Gestão de Estoque' para ver os alertas.")
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("⚠️ Estoque Baixo")
-            produtos['estoque'] = pd.to_numeric(produtos['estoque'], errors='coerce').fillna(0)
-            baixo = produtos[produtos['estoque'] < 5]
-            if not baixo.empty:
-                for _, r in baixo.iterrows(): st.error(f"**Repor:** {r['nome']} ({int(r['estoque'])} un)")
-            else: st.success("Estoque em dia!")
+    # Carregamento seguro dos dados
+    df_v = carregar_dinamico("vendas")
+    df_d = carregar_dinamico("despesas")
+    
+    # Verificação de colunas e dados
+    if not df_v.empty:
+        # Garantir que as colunas numéricas sejam tratadas corretamente
+        df_v['valor_bruto'] = pd.to_numeric(df_v['valor_bruto'], errors='coerce').fillna(0)
+        df_v['valor_liquido'] = pd.to_numeric(df_v['valor_liquido'], errors='coerce').fillna(0)
+        
+        # Filtro opcional por unidade para o Admin ver tudo ou apenas uma
+        unidade_f = st.selectbox("Filtrar Visão:", ["Geral"] + df_v['unidade'].unique().tolist())
+        
+        if unidade_f != "Geral":
+            df_v_view = df_v[df_v['unidade'] == unidade_f]
+            df_d_view = df_d[df_d['unidade'] == unidade_f] if not df_d.empty else df_d
+        else:
+            df_v_view = df_v
+            df_d_view = df_d
 
-        with col2:
-            st.subheader("📅 Validades")
-            produtos['validade_dt'] = pd.to_datetime(produtos['validade'], dayfirst=True, errors='coerce')
-            vencidos = produtos[produtos['validade_dt'] < datetime.now()]
-            if not vencidos.empty:
-                for _, r in vencidos.iterrows(): st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
-            else: st.success("Validades em dia!")
+        # Cálculos principais
+        bruto = df_v_view['valor_bruto'].sum()
+        liquido = df_v_view['valor_liquido'].sum()
+        
+        gastos = 0.0
+        if not df_d.empty and 'valor' in df_d.columns:
+            df_d_view['valor'] = pd.to_numeric(df_d_view['valor'], errors='coerce').fillna(0)
+            gastos = df_d_view['valor'].sum()
+
+        lucro_real = liquido - gastos
+
+        # Exibição dos Cartões (Métricas)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Faturamento Bruto", f"R$ {bruto:,.2f}")
+        c2.metric("Líquido (Pós Taxas)", f"R$ {liquido:,.2f}")
+        c3.metric("Despesas Totais", f"R$ {gastos:,.2f}")
+        c4.metric("Lucro Real", f"R$ {lucro_real:,.2f}", delta=f"{((lucro_real/bruto)*100 if bruto > 0 else 0):.1f}% margem")
+
+        st.divider()
+
+        # Gráficos Simples
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            st.subheader("Vendas por Unidade")
+            vendas_unidade = df_v.groupby('unidade')['valor_bruto'].sum()
+            st.bar_chart(vendas_unidade)
+
+        with col_g2:
+            st.subheader("Evolução de Vendas")
+            if 'data' in df_v.columns:
+                df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
+                vendas_dia = df_v.groupby('data')['valor_bruto'].sum()
+                st.line_chart(vendas_dia)
+    else:
+        st.info("Aguardando os primeiros dados de vendas para gerar indicadores.")
 
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
