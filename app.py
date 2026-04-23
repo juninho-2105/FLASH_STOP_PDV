@@ -169,17 +169,38 @@ if menu == "📊 Dashboard":
     else:
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
-# --- SELF-CHECKOUT PERSONALIZADO ---
+# --- ESTILO E LOGO PERSONALIZADO ---
+st.markdown("""
+    <style>
+    .flash-header {
+        text-align: center; 
+        background-color: #32CD32; 
+        padding: 10px; 
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    .flash-title {
+        color: black; 
+        font-weight: bold;
+        font-size: 42px;
+    }
+    </style>
+    <div class="flash-header">
+        <span class="flash-title">⚡ Flash Stop</span>
+    </div>
+""", unsafe_allow_html=True)
+
+# --- SELF-CHECKOUT OTIMIZADO (BIPOU-PAGOU) ---
 elif menu == "🛒 Self-Checkout":
-    # Título da Marca no Topo
-    st.markdown("<h1 style='text-align: center; color: #FFD700;'>⚡ Flash Stop</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Terminal de Autoatendimento</h3>", unsafe_allow_html=True)
     
     df_p = carregar_dinamico("produtos")
     
     if not df_p.empty:
-        # Campo de entrada para o leitor de código de barras ou seleção manual
-        p_entrada = st.selectbox("Passe o produto no leitor ou selecione:", 
+        # Garantir que preços sejam lidos como números
+        df_p['preco'] = pd.to_numeric(df_p['preco'], errors='coerce').fillna(0.0)
+        
+        p_entrada = st.selectbox("Passe o produto no leitor:", 
                                  [""] + df_p['nome'].tolist(), 
                                  key="entrada_bip")
 
@@ -190,8 +211,9 @@ elif menu == "🛒 Self-Checkout":
                 "preco": float(item_dados['preco']),
                 "unidade": st.session_state.unidade
             })
-            st.toast(f"✅ {p_entrada} adicionado!", icon="🛒")
-            time.sleep(0.5)
+            st.toast(f"✅ {p_entrada} adicionado!")
+            # Reduzi o tempo para leitura mais rápida
+            time.sleep(0.1) 
             st.rerun()
 
         st.divider()
@@ -202,7 +224,7 @@ elif menu == "🛒 Self-Checkout":
 
             for idx, row in resumo.iterrows():
                 c_item, c_sub, c_add = st.columns([4, 1, 1])
-                c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f}/un)")
+                c_item.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f})")
                 
                 if c_sub.button("—", key=f"btn_sub_{idx}"):
                     for i, p in enumerate(st.session_state.carrinho):
@@ -210,53 +232,40 @@ elif menu == "🛒 Self-Checkout":
                             st.session_state.carrinho.pop(i)
                             break
                     st.rerun()
-                if c_add.button("+", key=f"btn_add_{idx}"):
-                    st.session_state.carrinho.append({"produto": row['produto'], "preco": row['preco'], "unidade": st.session_state.unidade})
-                    st.rerun()
 
             total_venda = df_cart['preco'].sum()
             st.markdown(f"<h2 style='text-align: center;'>Total: R$ {total_venda:.2f}</h2>", unsafe_allow_html=True)
             
             forma = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
 
-            # Centralização dos botões empilhados
-            st.write("") # Espaçador
-            col_central, _ = st.columns([2, 1]) # Gambiarra leve para centralização ou use CSS
-            
-            # Usando CSS para garantir que os botões ocupem a largura e fiquem um sobre o outro
-            with st.container():
-                # Botão Finalizar Compra (Topo)
-                if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
-                    # Lógica de salvamento...
-                    nova_venda = pd.DataFrame([{
-                        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                        "unidade": st.session_state.unidade,
-                        "valor_bruto": total_venda,
-                        "valor_liquido": total_venda * 0.97,
-                        "forma_pgto": forma
-                    }])
-                    
-                    for item in st.session_state.carrinho:
-                        idx_p = df_p[df_p['nome'] == item['produto']].index[0]
-                        df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
-
-                    conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), nova_venda], ignore_index=True))
-                    conn.update(worksheet="produtos", data=df_p)
-                    
-                    st.session_state.carrinho = []
-                    st.success("Compra Finalizada com Sucesso!")
-                    st.balloons()
-                    time.sleep(2)
-                    st.rerun()
+            st.write("") 
+            if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
+                # Registro da venda
+                nova_venda = pd.DataFrame([{
+                    "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "unidade": st.session_state.unidade,
+                    "valor_bruto": total_venda,
+                    "valor_liquido": total_venda * 0.97,
+                    "forma_pgto": forma
+                }])
                 
-                # Botão Cancelar Compra (Baixo)
-                if st.button("❌ CANCELAR COMPRA", use_container_width=True):
-                    st.session_state.carrinho = []
-                    st.rerun()
-        else:
-            st.info("Aguardando bipagem de produtos...")
-    else:
-        st.warning("Cadastre produtos no inventário antes de abrir o checkout.")
+                # Baixa de estoque
+                for item in st.session_state.carrinho:
+                    idx_p = df_p[df_p['nome'] == item['produto']].index[0]
+                    df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
+
+                conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), nova_venda], ignore_index=True))
+                conn.update(worksheet="produtos", data=df_p)
+                
+                st.session_state.carrinho = []
+                st.success("Compra Finalizada!")
+                st.balloons()
+                time.sleep(1.5)
+                st.rerun()
+                
+            if st.button("❌ CANCELAR COMPRA", use_container_width=True):
+                st.session_state.carrinho = []
+                st.rerun()
 
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
