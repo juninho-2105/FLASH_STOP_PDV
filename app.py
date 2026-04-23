@@ -94,7 +94,6 @@ elif menu == "📦 Inventário":
     # Código de Inventário
     pass
 
-# O ERRO ACONTECEU AQUI: Certifique-se de que NÃO existe um "else:" antes desta linha
 elif menu == "💸 Despesas":
     st.header("💸 Gestão de Despesas")
     # Código de Despesas
@@ -107,10 +106,6 @@ elif menu == "📂 Contabilidade":
 elif menu == "📟 Configurações":
     # Código de Configurações
     pass
-
-# Opcional: O "else" só pode vir aqui, no final de tudo!
-else:
-    st.info("Selecione uma opção no menu.")
     
 elif menu == "📱 Pedidos Online":
     st.header("📱 Pedidos Recebidos Online")
@@ -133,6 +128,9 @@ elif menu == "📱 Pedidos Online":
             st.rerun()
     else:
         st.info("Nenhum pedido online pendente no momento.")
+else:
+    st.info("Selecione uma opção no menu.")
+    
 
 # ==================== 4. DASHBOARD (FINANCEIRO E ALERTAS) ====================
 if menu == "📊 Dashboard":
