@@ -617,14 +617,15 @@ elif menu == "📂 Contabilidade":
     except Exception as e:
         st.error(f"Erro ao gerar relatórios: {e}")
 
-# ==================== 10. CONFIGURAÇÕES (PDVs E TAXAS) ====================
+# ==================== 10. CONFIGURAÇÕES (CORRIGIDO) ====================
 elif menu == "📟 Configurações":
     st.header("📟 Gestão Operacional")
     
     aba_pdv, aba_maquinas = st.tabs(["📍 Pontos de Venda (PDVs)", "💳 Máquinas e Taxas"])
 
+    # --- ABA: GESTÃO DE PDVs ---
     with aba_pdv:
-        st.subheader("Gestão de Acessos")
+        st.subheader("Gestão de Acessos e Unidades")
         df_pts = carregar_dinamico("pontos")
         
         with st.form("novo_p"):
@@ -635,47 +636,77 @@ elif menu == "📟 Configurações":
                     novo = pd.DataFrame([{"nome": n, "senha": s}])
                     conn.update(worksheet="pontos", data=pd.concat([df_pts, novo], ignore_index=True))
                     st.cache_data.clear()
-                    st.success("Unidade cadastrada!")
+                    st.success("✅ Unidade cadastrada!")
                     st.rerun()
         
-        st.dataframe(df_pts, use_container_width=True, hide_index=True)
+        st.divider()
+        st.write("### Unidades Ativas")
+        
+        if not df_pts.empty:
+            for idx, row in df_pts.iterrows():
+                col_info, col_btn = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"🏠 **{row['nome']}** | Senha: `{row['senha']}`")
+                with col_btn:
+                    if st.button("🗑️ Excluir", key=f"del_pdv_{idx}", use_container_width=True):
+                        df_pts_novo = df_pts.drop(idx)
+                        conn.update(worksheet="pontos", data=df_pts_novo)
+                        st.cache_data.clear()
+                        st.warning(f"Unidade {row['nome']} removida.")
+                        time.sleep(1)
+                        st.rerun()
+        else:
+            st.info("Nenhum PDV cadastrado.")
 
+    # --- ABA: MÁQUINAS E TAXAS ---
     with aba_maquinas:
-        st.subheader("Configuração de Operadoras de Pagamento")
-        st.info("As taxas abaixo serão usadas para calcular o lucro líquido real de cada venda.")
+        st.subheader("Configuração de Operadoras e Vínculos")
         
         try:
             df_maq = carregar_dinamico("maquinas")
         except:
-            # Estrutura com taxas separadas
-            df_maq = pd.DataFrame(columns=["maquina", "taxa_pix", "taxa_debito", "taxa_credito"])
+            df_maq = pd.DataFrame(columns=["maquina", "pdv_vinculado", "taxa_pix", "taxa_debito", "taxa_credito"])
 
         with st.form("nova_maquina"):
-            nome_m = st.text_input("Nome da Operadora/Máquina (ex: Stone, Mercado Pago):")
+            nome_m = st.text_input("Nome da Operadora/Máquina:")
+            pdvs_disponiveis = df_pts['nome'].tolist() if not df_pts.empty else ["Nenhum PDV"]
+            vinculo = st.selectbox("Vincular esta máquina ao PDV:", pdvs_disponiveis)
             
             c1, c2, c3 = st.columns(3)
-            t_pix = c1.number_input("Taxa Pix (%)", min_value=0.0, value=0.0, step=0.01)
+            t_pix = c1.number_input("Taxa Pix (%)", min_value=0.0, step=0.01)
             t_deb = c2.number_input("Taxa Débito (%)", min_value=0.0, value=1.99, step=0.01)
             t_cre = c3.number_input("Taxa Crédito (%)", min_value=0.0, value=3.49, step=0.01)
             
-            if st.form_submit_button("🚀 SALVAR CONFIGURAÇÃO DE TAXAS"):
-                if nome_m:
+            if st.form_submit_button("🚀 SALVAR CONFIGURAÇÃO"):
+                if nome_m and vinculo != "Nenhum PDV":
                     nova_config = pd.DataFrame([{
                         "maquina": nome_m, 
+                        "pdv_vinculado": vinculo,
                         "taxa_pix": t_pix, 
                         "taxa_debito": t_deb, 
                         "taxa_credito": t_cre
                     }])
-                    # Atualiza ou adiciona
                     df_maq_final = pd.concat([df_maq, nova_config], ignore_index=True)
                     conn.update(worksheet="maquinas", data=df_maq_final)
                     st.cache_data.clear()
-                    st.success(f"Taxas da {nome_m} configuradas!")
+                    st.success("Configuração salva!")
                     time.sleep(1)
                     st.rerun()
 
         if not df_maq.empty:
             st.divider()
-            st.write("### Taxas Ativas")
-            # Exibe com formatação de porcentagem
+            st.write("### Taxas e Vínculos Ativos")
             st.dataframe(df_maq, use_container_width=True, hide_index=True)
+            
+            # --- CORREÇÃO DO ERRO DE INDENTAÇÃO AQUI ---
+            excluir_maq = st.selectbox("Selecionar máquina para excluir:", [""] + df_maq['maquina'].tolist())
+            if st.button("🗑️ Remover Máquina Selecionada"):
+                if excluir_maq:
+                    df_maq_limpo = df_maq[df_maq['maquina'] != excluir_maq]
+                    conn.update(worksheet="maquinas", data=df_maq_limpo)
+                    st.cache_data.clear()
+                    st.success(f"Máquina {excluir_maq} removida!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("Selecione uma máquina para excluir.")
