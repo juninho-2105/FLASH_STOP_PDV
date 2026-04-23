@@ -234,7 +234,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
     # 1. LOGO COMPACTO
-    col_l1, col_l2, col_l3 = st.columns([1.5, 1, 1.5])
+col_l1, col_l2, col_l3 = st.columns([1.5, 1, 1.5])
     with col_l2:
         try:
             st.image("logo_flash_stop.png", use_container_width=True)
