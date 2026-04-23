@@ -394,7 +394,7 @@ elif menu == "💸 Despesas":
         st.error(f"Erro ao acessar a aba de despesas: {e}")
         st.info("Dica: Certifique-se de que existe uma aba chamada 'despesas' no seu Google Sheets.")
 
-# ==================== 7. ENTRADA E CADASTRO (COM CÁLCULO DINÂMICO) ====================
+# ==================== 7. ENTRADA E CADASTRO (CALENDÁRIO PT-BR) ====================
 elif menu == "💰 Entrada Mercadoria":
     st.header("💰 Gestão de Estoque e Preços")
     
@@ -403,36 +403,37 @@ elif menu == "💰 Entrada Mercadoria":
         tipo_acao = st.radio("O que deseja fazer?", ["Repor Estoque Existente", "Cadastrar Novo Produto"], horizontal=True)
 
         if tipo_acao == "Repor Estoque Existente":
-            # 1. Seleção (Fora do form para atualizar os dados da tela)
             prod_sel = st.selectbox("Selecione o produto:", df_p['nome'].tolist())
             dados = df_p[df_p['nome'] == prod_sel].iloc[0]
             
-            # 2. Entradas de valores para cálculo
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
                 qtd_inc = st.number_input("Quantidade que chegou:", min_value=1, step=1)
             with c2:
                 custo = st.number_input("Custo Unitário (R$):", min_value=0.0, format="%.2f", key="custo_repo")
             with c3:
                 margem = st.number_input("Margem de Lucro (%):", min_value=0.0, value=30.0, key="margem_repo")
+            with c4:
+                # FORMATO BRASILEIRO AQUI
+                nova_val = st.date_input(
+                    "Nova Validade:", 
+                    value=datetime.now() + timedelta(days=90),
+                    format="DD/MM/YYYY" # Exibe no padrão brasileiro
+                )
 
-            # CÁLCULO DINÂMICO (Aparece na hora)
-            preco_sugerido = custo * (1 + (margem / 100))
-            
-            st.markdown(f"""
-            <div style="background-color:#f0f2f6;padding:15px;border-radius:10px;border-left:5px solid #2e7d32">
-                <strong>Sugestão de Venda:</strong> R$ {preco_sugerido:.2f}<br>
-                <small>Estoque Atual: {dados['estoque']} | Novo Estoque: {int(dados['estoque']) + qtd_inc}</small>
-            </div>
-            """, unsafe_allow_html=True)
+            # ... (código de cálculo e markdown permanece igual) ...
 
-            # 3. Botão de confirmação
-            preco_final = st.number_input("Preço Final que será aplicado (R$):", value=preco_sugerido, format="%.2f")
-            
             if st.button("🚀 ATUALIZAR PRODUTO NO SISTEMA", use_container_width=True):
                 idx = df_p[df_p['nome'] == prod_sel].index[0]
                 df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) + qtd_inc
-                df_p.at[idx, 'preco'] = preco_final
+                
+                # Salva na coluna preco_venda
+                if 'preco_venda' in df_p.columns:
+                    df_p.at[idx, 'preco_venda'] = preco_final
+                else:
+                    df_p.at[idx, 'preco'] = preco_final 
+                
+                df_p.at[idx, 'validade'] = nova_val.strftime("%d/%m/%Y")
                 
                 with st.spinner("Salvando..."):
                     conn.update(worksheet="produtos", data=df_p)
@@ -446,41 +447,22 @@ elif menu == "💰 Entrada Mercadoria":
             st.subheader("Novo Cadastro")
             nome_n = st.text_input("Nome do Produto:")
             
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
                 estoque_n = st.number_input("Estoque Inicial:", min_value=0, step=1)
             with c2:
                 custo_n = st.number_input("Custo Unitário (R$):", min_value=0.0, format="%.2f")
             with c3:
                 margem_n = st.number_input("Margem de Lucro (%):", min_value=0.0, value=30.0)
+            with c4:
+                # CALENDÁRIO NO PADRÃO BRASILEIRO
+                validade_n = st.date_input(
+                    "Validade:", 
+                    value=datetime.now() + timedelta(days=180),
+                    format="DD/MM/YYYY" # Exibe no padrão brasileiro
+                )
             
-            # Cálculo automático
-            venda_n = custo_n * (1 + (margem_n / 100))
-            st.info(f"O preço de venda calculado é: **R$ {venda_n:.2f}**")
-            
-            preco_venda_final = st.number_input("Preço de Venda Final (ajuste se necessário):", value=venda_n, format="%.2f")
-
-            if st.button("➕ CADASTRAR NOVO PRODUTO", use_container_width=True):
-                if not nome_n:
-                    st.error("Digite o nome do produto!")
-                else:
-                    novo_item = {
-                        "nome": nome_n,
-                        "estoque": estoque_n,
-                        "estoque_minimo": 5,
-                        "preco": preco_venda_final,
-                        "validade": ""
-                    }
-                    # Adiciona e salva
-                    df_novo = pd.concat([df_p, pd.DataFrame([novo_item])], ignore_index=True)
-                    conn.update(worksheet="produtos", data=df_novo)
-                    st.cache_data.clear()
-                    st.success("Produto cadastrado!")
-                    time.sleep(1.5)
-                    st.rerun()
-
-    except Exception as e:
-        st.error(f"Erro na operação: {e}")
+            # ... (restante do código de cadastro permanece igual) ...
 
 # ==================== 8. INVENTÁRIO (COM LIMPEZA DE VENCIDOS) ====================
 elif menu == "📦 Inventário":
