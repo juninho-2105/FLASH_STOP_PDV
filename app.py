@@ -461,8 +461,6 @@ elif menu == "💰 Entrada Mercadoria":
                     value=datetime.now() + timedelta(days=180),
                     format="DD/MM/YYYY" # Exibe no padrão brasileiro
                 )
-            
-            # ... (restante do código de cadastro permanece igual) ...
 
 # ==================== 8. INVENTÁRIO (COM LIMPEZA DE VENCIDOS) ====================
 elif menu == "📦 Inventário":
