@@ -276,24 +276,73 @@ elif menu == "💰 Entrada Mercadoria":
                 else:
                     st.error("O nome do produto é obrigatório.")
 
-# --- INVENTÁRIO ---
+# --- INVENTÁRIO INDEPENDENTE POR PDV ---
 elif menu == "📦 Inventário":
-    st.header("📦 Gestão de Inventário")
+    st.header("📦 Gestão de Inventário por Unidade")
+    
+    # Carregamento de dados
     df_p = carregar_dinamico("produtos")
-    if not df_p.empty:
-        st.dataframe(df_p, use_container_width=True, hide_index=True)
-        st.divider()
-        st.subheader("🗑️ Descontinuar Produto")
-        p_excluir = st.selectbox("Selecione para remover:", [""] + df_p['nome'].tolist())
-        if st.button("EXCLUIR PERMANENTEMENTE", type="secondary"):
-            if p_excluir:
-                df_p = df_p[df_p['nome'] != p_excluir]
-                conn.update(worksheet="produtos", data=df_p)
-                st.cache_data.clear()
-                st.error(f"{p_excluir} removido.")
-                time.sleep(1)
-                st.rerun()
+    df_pts = carregar_dinamico("pontos")
 
+    if not df_p.empty:
+        # 1. Seletor de Unidade para Filtro
+        unidades_disponiveis = ["Geral"] + df_pts['nome'].tolist() if not df_pts.empty else ["Geral"]
+        unidade_sel = st.selectbox("Selecione a Unidade para visualizar o estoque:", unidades_disponiveis)
+
+        # 2. Lógica de Filtro
+        # Nota: Se sua planilha 'produtos' tiver uma coluna 'unidade', filtramos por ela.
+        # Caso contrário, o sistema exibe o estoque global com opção de edição.
+        if unidade_sel != "Geral" and 'unidade' in df_p.columns:
+            df_filtrado = df_p[df_p['unidade'] == unidade_sel].copy()
+        else:
+            df_filtrado = df_p.copy()
+
+        # 3. Visualização e Alertas Rápidos
+        st.subheader(f"Estoque Atual: {unidade_sel}")
+        
+        # Formatação para melhor leitura
+        st.dataframe(
+            df_filtrado.style.apply(lambda x: ['background-color: #ffcccc' if (isinstance(v, int) or isinstance(v, float)) and v < 5 else '' for v in x], subset=['estoque']),
+            use_container_width=True, 
+            hide_index=True
+        )
+
+        st.divider()
+
+        # 4. Ações de Inventário (Edição e Exclusão)
+        col_inv1, col_inv2 = st.columns(2)
+
+        with col_inv1:
+            st.subheader("✏️ Ajuste Rápido")
+            p_ajuste = st.selectbox("Produto para ajustar quantidade:", [""] + df_filtrado['nome'].tolist())
+            nova_qtd = st.number_input("Nova Quantidade Real em Prateleira:", min_value=0, step=1)
+            
+            if st.button("Salvar Ajuste de Inventário", use_container_width=True):
+                if p_ajuste:
+                    # Localiza o índice no DataFrame original para garantir a gravação correta
+                    idx = df_p[df_p['nome'] == p_ajuste].index[0]
+                    df_p.at[idx, 'estoque'] = nova_qtd
+                    conn.update(worksheet="produtos", data=df_p)
+                    st.cache_data.clear()
+                    st.success(f"Estoque de {p_ajuste} atualizado para {nova_qtd}!")
+                    time.sleep(1)
+                    st.rerun()
+
+        with col_inv2:
+            st.subheader("🗑️ Remover do Catálogo")
+            p_excluir = st.selectbox("Produto para remover definitivamente:", [""] + df_filtrado['nome'].tolist())
+            
+            if st.button("EXCLUIR PRODUTO", type="secondary", use_container_width=True):
+                if p_excluir:
+                    df_p = df_p[df_p['nome'] != p_excluir]
+                    conn.update(worksheet="produtos", data=df_p)
+                    st.cache_data.clear()
+                    st.error(f"{p_excluir} removido do sistema.")
+                    time.sleep(1)
+                    st.rerun()
+
+    else:
+        st.info("Nenhum produto encontrado no banco de dados.")
 # --- GESTÃO DE DESPESAS ---
 elif menu == "💸 Despesas":
     st.header("💸 Gestão de Despesas")
