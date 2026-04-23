@@ -155,6 +155,7 @@ if menu == "📊 Dashboard":
                     st.error(f"**VENCIDO:** {r['nome']} ({r['validade']})")
             else:
                 st.success("T
+                           
 # --- SELF-CHECKOUT ---
 elif menu == "🛒 Self-Checkout":
     st.header("🛒 Checkout")
