@@ -169,6 +169,8 @@ if menu == "📊 Dashboard":
     else:
         st.info("Nenhum produto cadastrado para monitoramento.")
                            
+
+# ==================== NAVEGAÇÃO DE TELAS ====================
 # --- LOGO ESTILIZADA (Verde Limão e Raio Preto) ---
 st.markdown("""
     <style>
@@ -191,9 +193,6 @@ st.markdown("""
         <span class="flash-title">⚡ Flash Stop</span>
     </div>
 """, unsafe_allow_html=True)
-
-# ==================== NAVEGAÇÃO DE TELAS ====================
-
 if menu == "📊 Dashboard":
     # (Mantenha seu código do Dashboard aqui)
     pass
