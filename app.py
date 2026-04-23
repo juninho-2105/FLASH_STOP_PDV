@@ -3,6 +3,11 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
+import locale
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.utf8')
+except:
+    pass
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
