@@ -394,7 +394,7 @@ elif menu == "💸 Despesas":
         st.error(f"Erro ao acessar a aba de despesas: {e}")
         st.info("Dica: Certifique-se de que existe uma aba chamada 'despesas' no seu Google Sheets.")
 
-# ==================== 7. ENTRADA E CADASTRO (COM CAMPO DE VALIDADE) ====================
+# ==================== 7. ENTRADA E CADASTRO (SALVANDO EM PRECO_VENDA) ====================
 elif menu == "💰 Entrada Mercadoria":
     st.header("💰 Gestão de Estoque e Preços")
     
@@ -408,7 +408,7 @@ elif menu == "💰 Entrada Mercadoria":
             dados = df_p[df_p['nome'] == prod_sel].iloc[0]
             
             # 2. Entradas de valores para cálculo
-            c1, c2, c3, c4 = st.columns(4) # Adicionada 4ª coluna para Validade
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
                 qtd_inc = st.number_input("Quantidade que chegou:", min_value=1, step=1)
             with c2:
@@ -416,7 +416,6 @@ elif menu == "💰 Entrada Mercadoria":
             with c3:
                 margem = st.number_input("Margem de Lucro (%):", min_value=0.0, value=30.0, key="margem_repo")
             with c4:
-                # Validade na reposição
                 nova_val = st.date_input("Nova Validade:", value=datetime.now() + timedelta(days=90))
 
             # CÁLCULO DINÂMICO
@@ -435,7 +434,13 @@ elif menu == "💰 Entrada Mercadoria":
             if st.button("🚀 ATUALIZAR PRODUTO NO SISTEMA", use_container_width=True):
                 idx = df_p[df_p['nome'] == prod_sel].index[0]
                 df_p.at[idx, 'estoque'] = int(df_p.at[idx, 'estoque']) + qtd_inc
-                df_p.at[idx, 'preco'] = preco_final
+                
+                # ALTERAÇÃO: Salva na coluna preco_venda
+                if 'preco_venda' in df_p.columns:
+                    df_p.at[idx, 'preco_venda'] = preco_final
+                else:
+                    df_p.at[idx, 'preco'] = preco_final # Backup caso a coluna ainda se chame 'preco'
+                
                 df_p.at[idx, 'validade'] = nova_val.strftime("%d/%m/%Y")
                 
                 with st.spinner("Salvando..."):
@@ -450,7 +455,6 @@ elif menu == "💰 Entrada Mercadoria":
             st.subheader("Novo Cadastro")
             nome_n = st.text_input("Nome do Produto:")
             
-            # Layout em 4 colunas para incluir a validade sem quebrar a linha
             c1, c2, c3, c4 = st.columns(4)
             with c1:
                 estoque_n = st.number_input("Estoque Inicial:", min_value=0, step=1)
@@ -459,7 +463,6 @@ elif menu == "💰 Entrada Mercadoria":
             with c3:
                 margem_n = st.number_input("Margem de Lucro (%):", min_value=0.0, value=30.0)
             with c4:
-                # CAMPO DE VALIDADE ADICIONADO AQUI
                 validade_n = st.date_input("Validade:", value=datetime.now() + timedelta(days=180))
             
             # Cálculo automático
@@ -472,14 +475,15 @@ elif menu == "💰 Entrada Mercadoria":
                 if not nome_n:
                     st.error("Digite o nome do produto!")
                 else:
+                    # ALTERAÇÃO: Chave do dicionário alterada para 'preco_venda'
                     novo_item = {
                         "nome": nome_n,
                         "estoque": estoque_n,
                         "estoque_minimo": 5,
-                        "preco": preco_venda_final,
-                        "validade": validade_n.strftime("%d/%m/%Y") # Salva a validade
+                        "preco_venda": preco_venda_final,
+                        "validade": validade_n.strftime("%d/%m/%Y")
                     }
-                    # Adiciona e salva
+                    
                     df_novo = pd.concat([df_p, pd.DataFrame([novo_item])], ignore_index=True)
                     conn.update(worksheet="produtos", data=df_novo)
                     st.cache_data.clear()
