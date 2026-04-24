@@ -110,7 +110,7 @@ if st.sidebar.button("🚪 Sair"):
 
 # ==================== 4. LÓGICA DAS TELAS ====================
 
-# ==================== ABA: DASHBOARD (MÉTRICAS + ALERTAS MULTI-PDV) ====================
+# ==================== ABA: DASHBOARD (VISUAL ORIGINAL + BOTÃO TELEGRAM) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Painel de Controle Flash Stop")
 
@@ -119,24 +119,21 @@ if menu == "📊 Dashboard":
     df_d = carregar_dinamico("despesas")
     df_estoque_local = carregar_dinamico("estoque_pdv") 
 
-    # --- NOVO: FILTRO DE UNIDADE PARA O FINANCEIRO ---
-    st.subheader("📍 Filtro de Unidade")
-    unidade_alvo = "Todas"
+    # --- FILTRO DE UNIDADE ---
     if df_v is not None and not df_v.empty:
         lista_unid = ["Todas"] + sorted(df_v['unidade'].unique().tolist())
-        unidade_alvo = st.selectbox("Selecione o PDV para analisar as métricas:", lista_unid)
-        
+        unidade_alvo = st.selectbox("Filtrar métricas financeiras por PDV:", lista_unid)
         if unidade_alvo != "Todas":
             df_v = df_v[df_v['unidade'] == unidade_alvo]
+    else:
+        unidade_alvo = "Todas"
 
-    # --- PARTE A: MÉTRICAS FINANCEIRAS ---
+    # --- PARTE A: MÉTRICAS FINANCEIRAS (O visual de 5 colunas que você gosta) ---
     st.subheader(f"💰 Resumo Financeiro - {unidade_alvo}")
     if df_v is not None and not df_v.empty:
-        # Tratamento de dados numéricos
         df_v['valor_bruto'] = pd.to_numeric(df_v['valor_bruto'], errors='coerce').fillna(0)
         df_v['valor_liquido'] = pd.to_numeric(df_v['valor_liquido'], errors='coerce').fillna(0)
         
-        # Cálculos Principais
         bruto_total = df_v['valor_bruto'].sum()
         liquido_cartao = df_v['valor_liquido'].sum()
         cashback_total = bruto_total * 0.02
@@ -144,15 +141,10 @@ if menu == "📊 Dashboard":
         gastos = 0.0
         if df_d is not None and not df_d.empty and 'valor' in df_d.columns:
             df_d['valor'] = pd.to_numeric(df_d['valor'], errors='coerce').fillna(0)
-            # Se a despesa também tiver coluna 'unidade', podemos filtrar aqui:
-            if unidade_alvo != "Todas" and 'unidade' in df_d.columns:
-                gastos = df_d[df_d['unidade'] == unidade_alvo]['valor'].sum()
-            else:
-                gastos = df_d['valor'].sum()
+            gastos = df_d['valor'].sum()
 
         lucro_final = liquido_cartao - gastos - cashback_total
 
-        # Exibição das Métricas em 5 colunas
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Faturamento Bruto", f"R$ {bruto_total:,.2f}")
         m2.metric("Despesas", f"R$ {gastos:,.2f}")
@@ -160,50 +152,78 @@ if menu == "📊 Dashboard":
         m4.metric("Líquido Cartão", f"R$ {liquido_cartao:,.2f}")
         m5.metric("Lucro Real", f"R$ {lucro_final:,.2f}")
 
-        # Gráfico de Vendas Diárias
         st.divider()
         st.subheader("📈 Evolução de Vendas Diárias")
         df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
         vendas_diarias = df_v.groupby(df_v['data'].dt.date)['valor_bruto'].sum()
         st.area_chart(vendas_diarias, color="#32CD32")
     else:
-        st.info("Aguardando dados de vendas para gerar o painel financeiro.")
+        st.info("Aguardando dados de vendas.")
 
     st.divider()
 
-    # --- PARTE B: ALERTAS OPERACIONAIS (SISTEMA MULTI-PDV) ---
+    # --- PARTE B: ALERTAS OPERACIONAIS (VISUAL ORIGINAL REESTABELECIDO) ---
     st.subheader("🚨 Alertas de Operação (Por Unidade)")
     
     if df_estoque_local is not None and not df_estoque_local.empty:
-        # Sanitização dos dados de estoque
+        # Prevenção de erros nos dados
         df_estoque_local['quantidade'] = pd.to_numeric(df_estoque_local['quantidade'], errors='coerce').fillna(0)
         df_estoque_local['minimo_alerta'] = pd.to_numeric(df_estoque_local['minimo_alerta'], errors='coerce').fillna(5)
         df_estoque_local['validade_dt'] = pd.to_datetime(df_estoque_local['validade'], dayfirst=True, errors='coerce')
         hoje = datetime.now()
 
-        # Filtros de Alerta
-        baixo = df_estoque_local[df_estoque_local['quantidade'] <= df_estoque_local['minimo_alerta']]
-        vencidos = df_estoque_local[df_estoque_local['validade_dt'] < hoje]
-        vencendo_em_breve = df_estoque_local[(df_estoque_local['validade_dt'] >= hoje) & (df_estoque_local['validade_dt'] <= hoje + timedelta(days=7))]
-
-        # --- BOTÃO DE NOTIFICAÇÃO TELEGRAM ---
-        if st.button("📲 Enviar Alertas Críticos para o Telegram", use_container_width=True, type="primary"):
-            if not baixo.empty or not vencidos.empty or not vencendo_em_breve.empty:
-                msg = "<b>⚠️ RELATÓRIO OPERACIONAL FLASH STOP</b>\n\n"
-                if not baixo.empty:
-                    msg += "<b>📦 ESTOQUE CRÍTICO:</b>\n"
-                    for _, r in baixo.iterrows():
+        # 1. BOTÃO DE NOTIFICAÇÃO (Posicionado antes dos cards para fácil acesso)
+        if st.button("📲 Notificar Pendências no Telegram", use_container_width=True):
+            # Filtros para a mensagem
+            baixo_msg = df_estoque_local[df_estoque_local['quantidade'] <= df_estoque_local['minimo_alerta']]
+            venc_msg = df_estoque_local[df_estoque_local['validade_dt'] <= hoje + timedelta(days=7)]
+            
+            if not baixo_msg.empty or not venc_msg.empty:
+                msg = "<b>⚠️ FLASH STOP: RELATÓRIO DE PENDÊNCIAS</b>\n"
+                if not baixo_msg.empty:
+                    msg += "\n<b>📦 ESTOQUE:</b>\n"
+                    for _, r in baixo_msg.iterrows():
                         msg += f"• {r['unidade']} | {r['nome']}: {int(r['quantidade'])} un\n"
-                
-                if not vencidos.empty or not vencendo_em_breve.empty:
-                    msg += "\n<b>📅 ALERTAS DE VALIDADE:</b>\n"
-                    for _, r in vencidos.iterrows():
-                        msg += f"• {r['unidade']} | VENCIDO: {r['nome']}\n"
-                    for _, r in vencendo_em_breve.iterrows():
-                        msg += f"• {r['unidade']} | VENCE LOGO: {r['nome']}\n"
+                if not venc_msg.empty:
+                    msg += "\n<b>📅 VALIDADES:</b>\n"
+                    for _, r in venc_msg.iterrows():
+                        status = "VENCIDO" if r['validade_dt'] < hoje else "VENCE LOGO"
+                        msg += f"• {r['unidade']} | {status}: {r['nome']}\n"
                 
                 enviar_telegram(msg)
-                st
+                st.toast("Enviado para o Telegram! ⚡")
+            else:
+                st.toast("Nada para enviar! Tudo OK. ✅")
+
+        # 2. VISUAL DAS COLUNAS (Exatamente como era antes)
+        col_estoque, col_validade = st.columns(2)
+
+        with col_estoque:
+            st.markdown("#### ⚠️ Estoque Crítico")
+            baixo = df_estoque_local[df_estoque_local['quantidade'] <= df_estoque_local['minimo_alerta']]
+            if not baixo.empty:
+                for _, r in baixo.iterrows():
+                    st.error(f"📍 **{r['unidade']}** | **{r['nome']}**: {int(r['quantidade'])} un (Mín: {int(r['minimo_alerta'])})")
+            else:
+                st.success("✅ Estoque em dia em todos os PDVs.")
+
+        with col_validade:
+            st.markdown("#### 📅 Validades")
+            vencidos = df_estoque_local[df_estoque_local['validade_dt'] < hoje]
+            vencendo_em_breve = df_estoque_local[(df_estoque_local['validade_dt'] >= hoje) & (df_estoque_local['validade_dt'] <= hoje + timedelta(days=7))]
+
+            if not vencidos.empty:
+                for _, r in vencidos.iterrows():
+                    st.error(f"📍 **{r['unidade']}** | **VENCIDO:** {r['nome']} ({r['validade']})")
+            
+            if not vencendo_em_breve.empty:
+                for _, r in vencendo_em_breve.iterrows():
+                    st.warning(f"📍 **{r['unidade']}** | **Vence em breve:** {r['nome']} ({r['validade']})")
+            
+            if vencidos.empty and vencendo_em_breve.empty:
+                st.success("✅ Validades em dia em todas as unidades.")
+    else:
+        st.info("Nenhum dado de estoque local encontrado.")
         
 # ==================== ABA: SELF-CHECKOUT (COM ALERTAS) ====================
 elif menu == "🛒 Self-Checkout":
