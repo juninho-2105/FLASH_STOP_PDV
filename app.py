@@ -261,18 +261,20 @@ elif menu == "🛒 Self-Checkout":
         col_ativa = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
         
         st.subheader("🛍️ Adicionar Produto")
-        col_in, col_bt = st.columns([3, 1])
-        
-        with col_in:
-            p_selecionado = st.selectbox(
-                "Passe o produto no leitor ou digite o nome:", 
-                [""] + df_p['nome'].tolist(), 
-                key="input_checkout_v4"
-            )
-        
-        with col_bt:
-            if st.button("➕ ADICIONAR", use_container_width=True, type="secondary"):
-                if p_selecionado:
+       col_in, col_bt = st.columns([4, 1])
+
+with col_in:
+    p_selecionado = st.selectbox(
+        "Passe o produto no leitor ou digite o nome:", 
+        [""] + df_p['nome'].tolist(), 
+        key="input_checkout_v4",
+        label_visibility="collapsed" # Remove o texto de cima para alinhar perfeito
+    )
+
+with col_bt:
+    # O botão agora está dentro de uma coluna com 'align-items: flex-end'
+    if st.button("➕ ADD", use_container_width=True, type="secondary"):
+        if p_selecionado:
                     dados = df_p[df_p['nome'] == p_selecionado].iloc[0]
                     # Aplica a sanitização aqui para garantir o valor unitário correto
                     preco_limpo = sanitizar_preco_venda(dados[col_ativa])
