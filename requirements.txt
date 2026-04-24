@@ -3,4 +3,6 @@ pandas
 qrcode
 st-gsheets-connection
 Pillow
-
+streamlit-autorefresh
+streamlit-gsheets
+pandas
