@@ -9,17 +9,18 @@ import streamlit as st
 
 import streamlit as st
 
-st.set_page_config(
-    page_title="FlashStop PDV",
-    page_icon="logo.png",
-    layout="wide"
-)
+# 1. Configuração da aba (sempre o primeiro)
+st.set_page_config(page_title="FlashStop PDV", page_icon="logo.png")
+
+# 2. O Logo no topo
+st.image("logo.png", width=200)
 
 # Comando extra para ajudar os navegadores a encontrarem o ícone
 st.markdown(f"""
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="icon" href="logo.png">
 """, unsafe_allow_html=True)
+
 def enviar_telegram(mensagem):
     # Substitua pelos seus dados reais
     TOKEN = "8318147830:AAG9xVf5VzouaGcuWxtcPfUFOCfgjdtK4Yk"
