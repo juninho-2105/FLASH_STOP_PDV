@@ -12,6 +12,8 @@ st.set_page_config(
     page_icon="logo.png", # O caminho para o seu arquivo de imagem
     layout="wide"
 )
+st.image("logo.png", width=200)
+
 def enviar_telegram(mensagem):
     # Substitua pelos seus dados reais
     TOKEN = "8318147830:AAG9xVf5VzouaGcuWxtcPfUFOCfgjdtK4Yk"
