@@ -3,9 +3,14 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
+from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
+
+# --- NOVO: HEARTBEAT (Anti-inatividade) ---
+# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
+st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
 
 # CSS para botões ultra-compactos e ajustes de interface
 st.markdown("""
@@ -41,10 +46,26 @@ def carregar_dinamico(aba):
     try:
         return conn.read(worksheet=aba, ttl=0)
     except Exception:
-        # Cria DataFrame vazio se a aba não existir para evitar crash
         return pd.DataFrame()
 
-# ==================== 2. SISTEMA DE LOGIN ====================
+# ==================== 2. SISTEMA DE LOGIN (URL + MANUAL) ====================
+
+# --- NOVO: CAPTURA DE PARÂMETROS DA URL ---
+# Link de acesso direto: .../?pdv=NOME_DO_PDV&token=flash2026
+query_params = st.query_params
+TOKEN_MESTRE = "flash2026"
+
+if not st.session_state.autenticado:
+    if "pdv" in query_params and "token" in query_params:
+        if query_params["token"] == TOKEN_MESTRE:
+            st.session_state.update({
+                "autenticado": True, 
+                "unidade": query_params["pdv"], 
+                "perfil": "pdv"
+            })
+            st.rerun()
+
+# --- LOGIN MANUAL ---
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
     with st.form("login_form"):
@@ -74,7 +95,6 @@ menu = st.sidebar.radio("Navegação", opcoes)
 if st.sidebar.button("🚪 Sair"):
     st.session_state.autenticado = False
     st.rerun()
-
 # ==================== 4. LÓGICA DAS TELAS ====================
 
 # ==================== ABA: DASHBOARD (MÉTRICAS + ALERTAS MULTI-PDV) ====================
