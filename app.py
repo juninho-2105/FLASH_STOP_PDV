@@ -8,41 +8,6 @@ from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip ins
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-st.markdown("""
-    <style>
-    /* 1. Esconde apenas o texto 'Hosted with Streamlit' e o botão de Deploy */
-    footer {visibility: hidden;}
-    .stAppDeployButton {display: none !important;}
-    
-    /* 2. Remove a barra superior mas mantém o botão do menu lateral visível */
-    header {
-        background-color: rgba(0,0,0,0) !important;
-        height: 3rem;
-    }
-    
-    /* 3. Ajusta o botão do menu lateral para ficar visível e acessível */
-    button[kind="headerNoContext"] {
-        visibility: visible !important;
-        z-index: 999;
-    }
-
-    /* 4. Remove ícones de status/loading que ficam no topo */
-    [data-testid="stStatusWidget"] {display: none !important;}
-
-    /* 5. Seus estilos de botões do PDV (Mantido) */
-    .stButton>button {
-        border-radius: 6px;
-        padding: 2px 5px;
-    }
-    div[data-testid="column"] button {
-        height: 32px !important;
-        width: 32px !important;
-        font-weight: bold !important;
-        font-size: 18px !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # --- NOVO: HEARTBEAT (Anti-inatividade) ---
 # Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
 st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
