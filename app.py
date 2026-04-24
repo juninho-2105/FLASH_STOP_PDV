@@ -3,33 +3,18 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
-from streamlit_autorefresh import st_autorefresh 
+from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-# --- [CORREÇÃO CRÍTICA] INICIALIZAÇÃO DE ESTADOS DE SESSÃO ---
-# Deve vir antes de qualquer lógica de IF ou consulta de URL
-if 'autenticado' not in st.session_state: st.session_state.autenticado = False
-if 'carrinho' not in st.session_state: st.session_state.carrinho = []
-if 'unidade' not in st.session_state: st.session_state.unidade = ""
-if 'perfil' not in st.session_state: st.session_state.perfil = ""
-
-# --- HEARTBEAT (Anti-inatividade) ---
+# --- NOVO: HEARTBEAT (Anti-inatividade) ---
+# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
 st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
 
-# --- CSS: LIMPEZA DE INTERFACE E ESTILO ---
+# CSS para botões ultra-compactos e ajustes de interface
 st.markdown("""
     <style>
-    /* Esconde branding, footer e botões de deploy */
-    [data-testid="stHeader"] {display: none !important;}
-    .stAppDeployButton {display: none !important;}
-    footer {visibility: hidden !important;}
-    [data-testid="stStatusWidget"] {display: none !important;}
-    
-    /* Mantém o menu lateral (sidebar) funcional */
-    [data-testid="stSidebar"] { visibility: visible !important; }
-
     /* Botões menores no checkout */
     .stButton>button {
         border-radius: 6px;
@@ -41,8 +26,18 @@ st.markdown("""
         font-weight: bold !important;
         font-size: 18px !important;
     }
+    /* Esconder branding do Streamlit conforme solicitado */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
+
+# Inicialização de Estados de Sessão
+if 'autenticado' not in st.session_state: st.session_state.autenticado = False
+if 'carrinho' not in st.session_state: st.session_state.carrinho = []
+if 'unidade' not in st.session_state: st.session_state.unidade = ""
+if 'perfil' not in st.session_state: st.session_state.perfil = ""
 
 # Conexão com Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -55,10 +50,11 @@ def carregar_dinamico(aba):
 
 # ==================== 2. SISTEMA DE LOGIN (URL + MANUAL) ====================
 
+# --- NOVO: CAPTURA DE PARÂMETROS DA URL ---
+# Link de acesso direto: .../?pdv=NOME_DO_PDV&token=flash2026
 query_params = st.query_params
 TOKEN_MESTRE = "flash2026"
 
-# Login automático via URL
 if not st.session_state.autenticado:
     if "pdv" in query_params and "token" in query_params:
         if query_params["token"] == TOKEN_MESTRE:
@@ -69,7 +65,7 @@ if not st.session_state.autenticado:
             })
             st.rerun()
 
-# Login Manual
+# --- LOGIN MANUAL ---
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
     with st.form("login_form"):
@@ -88,7 +84,6 @@ if not st.session_state.autenticado:
                 else: st.error("Senha incorreta.")
             else: st.error("Usuário não encontrado.")
     st.stop()
-
 # ==================== 3. MENU LATERAL ====================
 st.sidebar.title("⚡ Flash Stop")
 st.sidebar.write(f"📍 **{st.session_state.unidade}**")
@@ -102,18 +97,23 @@ if st.sidebar.button("🚪 Sair"):
 
 # ==================== 4. LÓGICA DAS TELAS ====================
 
-# ABA: DASHBOARD
+# ==================== ABA: DASHBOARD (MÉTRICAS + ALERTAS MULTI-PDV) ====================
 if menu == "📊 Dashboard":
     st.header("📊 Painel de Controle Flash Stop")
+
+    # 1. Carregamento de Dados
     df_v = carregar_dinamico("vendas")
     df_d = carregar_dinamico("despesas")
     df_estoque_local = carregar_dinamico("estoque_pdv") 
 
+    # --- PARTE A: MÉTRICAS FINANCEIRAS ---
     st.subheader("💰 Resumo Financeiro")
     if df_v is not None and not df_v.empty:
+        # Tratamento de dados numéricos
         df_v['valor_bruto'] = pd.to_numeric(df_v['valor_bruto'], errors='coerce').fillna(0)
         df_v['valor_liquido'] = pd.to_numeric(df_v['valor_liquido'], errors='coerce').fillna(0)
         
+        # Cálculos Principais
         bruto_total = df_v['valor_bruto'].sum()
         liquido_cartao = df_v['valor_liquido'].sum()
         cashback_total = bruto_total * 0.02
@@ -125,6 +125,7 @@ if menu == "📊 Dashboard":
 
         lucro_final = liquido_cartao - gastos - cashback_total
 
+        # Exibição das Métricas em 5 colunas
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Faturamento Bruto", f"R$ {bruto_total:,.2f}")
         m2.metric("Despesas", f"R$ {gastos:,.2f}")
@@ -132,75 +133,220 @@ if menu == "📊 Dashboard":
         m4.metric("Líquido Cartão", f"R$ {liquido_cartao:,.2f}")
         m5.metric("Lucro Real", f"R$ {lucro_final:,.2f}")
 
+        # Gráfico de Vendas Diárias
         st.divider()
         st.subheader("📈 Evolução de Vendas Diárias")
         df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
         vendas_diarias = df_v.groupby(df_v['data'].dt.date)['valor_bruto'].sum()
         st.area_chart(vendas_diarias, color="#32CD32")
     else:
-        st.info("Aguardando dados de vendas.")
+        st.info("Aguardando dados de vendas para gerar o painel financeiro.")
 
-# ABA: SELF-CHECKOUT
+    st.divider()
+
+    # --- PARTE B: ALERTAS OPERACIONAIS (SISTEMA MULTI-PDV) ---
+    st.subheader("🚨 Alertas de Operação (Por Unidade)")
+    
+    if df_estoque_local is not None and not df_estoque_local.empty:
+        col_estoque, col_validade = st.columns(2)
+
+        with col_estoque:
+            st.markdown("#### ⚠️ Estoque Crítico")
+            
+            # Sanitização dos dados
+            df_estoque_local['quantidade'] = pd.to_numeric(df_estoque_local['quantidade'], errors='coerce').fillna(0)
+            df_estoque_local['minimo_alerta'] = pd.to_numeric(df_estoque_local['minimo_alerta'], errors='coerce').fillna(5)
+
+            # Filtro comparando estoque com limite da unidade
+            baixo = df_estoque_local[df_estoque_local['quantidade'] <= df_estoque_local['minimo_alerta']]
+            
+            if not baixo.empty:
+                for _, r in baixo.iterrows():
+                    st.error(f"📍 **{r['unidade']}** | **{r['nome']}**: {int(r['quantidade'])} un (Mín: {int(r['minimo_alerta'])})")
+            else:
+                st.success("✅ Estoque em dia em todos os PDVs.")
+
+        with col_validade:
+            st.markdown("#### 📅 Validades")
+            df_estoque_local['validade_dt'] = pd.to_datetime(df_estoque_local['validade'], dayfirst=True, errors='coerce')
+            hoje = datetime.now()
+            
+            vencidos = df_estoque_local[df_estoque_local['validade_dt'] < hoje]
+            vencendo_em_breve = df_estoque_local[(df_estoque_local['validade_dt'] >= hoje) & (df_estoque_local['validade_dt'] <= hoje + timedelta(days=7))]
+
+            if not vencidos.empty:
+                for _, r in vencidos.iterrows():
+                    st.error(f"📍 **{r['unidade']}** | **VENCIDO:** {r['nome']} ({r['validade']})")
+            
+            if not vencendo_em_breve.empty:
+                for _, r in vencendo_em_breve.iterrows():
+                    st.warning(f"📍 **{r['unidade']}** | **Vence em breve:** {r['nome']} ({r['validade']})")
+            
+            if vencidos.empty and vencendo_em_breve.empty:
+                st.success("✅ Validades em dia em todas as unidades.")
+    else:
+        st.info("Nenhum dado de estoque local encontrado para gerar alertas.")
+        
+
+# ==================== ABA: SELF-CHECKOUT (VERSÃO FINAL CORRIGIDA) ====================
 elif menu == "🛒 Self-Checkout":
+    # 1. LOGO IDENTIDADE VISUAL (Fundo Preto, Raio Verde, Escrita exata)
     st.markdown("""
-        <div style="background-color: black; padding: 25px; border-radius: 15px; text-align: center; display: flex; justify-content: center; align-items: center; font-family: 'Arial Black', sans-serif;">
-            <div style="color: #32CD32; font-size: 70px; margin-right: 15px;">⚡</div>
-            <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 0.9;">
-                <div style="color: #32CD32; font-size: 50px; text-transform: lowercase; font-weight: bold;">flash</div>
-                <div style="color: white; font-size: 50px; text-transform: lowercase; font-weight: bold;">stop</div>
-                <div style="color: white; font-size: 14px; text-transform: uppercase; letter-spacing: 3px; margin-top: 5px;">CONVENIÊNCIA</div>
+        <style>
+        .logo-container {
+            background-color: black;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial Black', sans-serif;
+        }
+        .logo-lightning {
+            color: #32CD32;
+            font-size: 70px;
+            margin-right: 15px;
+        }
+        .logo-text-block {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            line-height: 0.9;
+        }
+        .logo-flash {
+            color: #32CD32;
+            font-size: 50px;
+            text-transform: lowercase;
+            font-weight: bold;
+        }
+        .logo-stop {
+            color: white;
+            font-size: 50px;
+            text-transform: lowercase;
+            font-weight: bold;
+        }
+        .logo-convenience {
+            color: white;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-top: 5px;
+        }
+        </style>
+        <div class="logo-container">
+            <div class="logo-lightning">⚡</div>
+            <div class="logo-text-block">
+                <div class="logo-flash">flash</div>
+                <div class="logo-stop">stop</div>
+                <div class="logo-convenience">CONVENIÊNCIA</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    def sanitizar_preco(valor):
+    # 2. FUNÇÃO DE TRATAMENTO DE PREÇO (Resolve o erro de 10x o valor)
+    def sanitizar_preco_venda(valor):
         try:
+            # Converte para string e limpa tudo que não é número ou pontuação
             v = str(valor).replace('R$', '').strip()
-            if ',' in v: v = v.replace('.', '').replace(',', '.')
+            # Se vier algo como "1.200,50", remove o ponto e troca a vírgula
+            if ',' in v:
+                v = v.replace('.', '').replace(',', '.')
             return float(v)
-        except: return 0.0
+        except:
+            return 0.0
 
+    # 3. CARREGAMENTO E PREPARAÇÃO DOS PRODUTOS
     df_p = carregar_dinamico("produtos")
+    
     if df_p is not None and not df_p.empty:
         col_ativa = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
+        
         st.subheader("🛍️ Adicionar Produto")
         col_in, col_bt = st.columns([3, 1])
+        
         with col_in:
-            p_selecionado = st.selectbox("Leitor ou Nome:", [""] + df_p['nome'].tolist(), key="input_checkout")
+            p_selecionado = st.selectbox(
+                "Passe o produto no leitor ou digite o nome:", 
+                [""] + df_p['nome'].tolist(), 
+                key="input_checkout_v4"
+            )
+        
         with col_bt:
-            if st.button("➕ ADICIONAR", use_container_width=True):
+            if st.button("➕ ADICIONAR", use_container_width=True, type="secondary"):
                 if p_selecionado:
                     dados = df_p[df_p['nome'] == p_selecionado].iloc[0]
+                    # Aplica a sanitização aqui para garantir o valor unitário correto
+                    preco_limpo = sanitizar_preco_venda(dados[col_ativa])
+                    
                     st.session_state.carrinho.append({
                         "produto": dados['nome'], 
-                        "preco": sanitizar_preco(dados[col_ativa]),
+                        "preco": preco_limpo,
                         "unidade": st.session_state.unidade
                     })
+                    st.toast(f"{p_selecionado} adicionado!")
+                    time.sleep(0.1)
                     st.rerun()
 
+        st.divider()
+
+        # 4. EXIBIÇÃO DO CARRINHO E TOTAL
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
+            # Agrupa para mostrar quantidades (2x, 3x...)
             resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
+
             for idx, row in resumo.iterrows():
                 c_txt, c_btn = st.columns([5, 1])
                 c_txt.write(f"**{row['qtd']}x** {row['produto']} (R$ {row['preco']:.2f})")
-                if c_btn.button("🗑️", key=f"del_{idx}"):
+                if c_btn.button("🗑️", key=f"del_item_{idx}"):
                     for i, p in enumerate(st.session_state.carrinho):
                         if p['produto'] == row['produto']:
                             st.session_state.carrinho.pop(i)
                             break
                     st.rerun()
 
-            total = df_cart['preco'].sum()
-            st.markdown(f"<h2 style='text-align: center;'>TOTAL: R$ {total:.2f}</h2>", unsafe_allow_html=True)
+            total_final = df_cart['preco'].sum()
+            st.markdown(f"<h2 style='text-align: center; color: black;'>TOTAL: R$ {total_final:.2f}</h2>", unsafe_allow_html=True)
             
+            # 5. FINALIZAÇÃO
+            forma_pgto = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
+            
+            st.write("")
             if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
-                # Lógica simplificada de salvamento (exemplo)
+                # Registro da venda
+                venda_row = pd.DataFrame([{
+                    "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "unidade": st.session_state.unidade,
+                    "valor_bruto": total_final,
+                    "valor_liquido": total_final * 0.97, # Taxa de 3% exemplo
+                    "forma_pgto": forma_pgto
+                }])
+                
+                # Baixa de estoque
+                for item in st.session_state.carrinho:
+                    idx_p = df_p[df_p['nome'] == item['produto']].index[0]
+                    df_p.at[idx_p, 'estoque'] = max(0, int(df_p.at[idx_p, 'estoque']) - 1)
+
+                # Atualiza Sheets
+                conn.update(worksheet="vendas", data=pd.concat([carregar_dinamico("vendas"), venda_row], ignore_index=True))
+                conn.update(worksheet="produtos", data=df_p)
+                
                 st.session_state.carrinho = []
-                st.success("Venda finalizada com sucesso!")
+                st.success("Compra finalizada! Obrigado pela preferência.")
                 st.balloons()
-                time.sleep(1)
+                time.sleep(2)
                 st.rerun()
+
+            if st.button("❌ CANCELAR COMPRA", use_container_width=True):
+                st.session_state.carrinho = []
+                st.rerun()
+        else:
+            st.info("Aguardando produtos para iniciar a compra.")
+    else:
+        st.warning("Verifique a planilha: nenhum produto encontrado.")
+
 
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
