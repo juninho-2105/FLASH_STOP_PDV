@@ -1,3 +1,193 @@
+import streamlit as st
+import pandas as pd
+from streamlit_gsheets import GSheetsConnection
+from datetime import datetime, timedelta
+import time
+from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
+
+# ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
+st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
+
+# --- NOVO: HEARTBEAT (Anti-inatividade) ---
+# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
+st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
+
+# CSS para botões ultra-compactos e ajustes de interface
+st.markdown("""
+    <style>
+    /* Botões menores no checkout */
+    .stButton>button {
+        border-radius: 6px;
+        padding: 2px 5px;
+    }
+    div[data-testid="column"] button {
+        height: 32px !important;
+        width: 32px !important;
+        font-weight: bold !important;
+        font-size: 18px !important;
+    }
+    /* Esconder branding do Streamlit conforme solicitado */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
+
+# Inicialização de Estados de Sessão
+if 'autenticado' not in st.session_state: st.session_state.autenticado = False
+if 'carrinho' not in st.session_state: st.session_state.carrinho = []
+if 'unidade' not in st.session_state: st.session_state.unidade = ""
+if 'perfil' not in st.session_state: st.session_state.perfil = ""
+
+# Conexão com Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def carregar_dinamico(aba):
+    try:
+        return conn.read(worksheet=aba, ttl=0)
+    except Exception:
+        return pd.DataFrame()
+
+# ==================== 2. SISTEMA DE LOGIN (URL + MANUAL) ====================
+
+# --- NOVO: CAPTURA DE PARÂMETROS DA URL ---
+# Link de acesso direto: .../?pdv=NOME_DO_PDV&token=flash2026
+query_params = st.query_params
+TOKEN_MESTRE = "flash2026"
+
+if not st.session_state.autenticado:
+    if "pdv" in query_params and "token" in query_params:
+        if query_params["token"] == TOKEN_MESTRE:
+            st.session_state.update({
+                "autenticado": True, 
+                "unidade": query_params["pdv"], 
+                "perfil": "pdv"
+            })
+            st.rerun()
+
+# --- LOGIN MANUAL ---
+if not st.session_state.autenticado:
+    st.title("⚡ Flash Stop - Acesso")
+    with st.form("login_form"):
+        user = st.text_input("Usuário / PDV")
+        senha = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar", use_container_width=True):
+            df_pts = carregar_dinamico("pontos")
+            if user == "admin" and senha == "flash123":
+                st.session_state.update({"autenticado": True, "unidade": "Administração", "perfil": "admin"})
+                st.rerun()
+            elif not df_pts.empty and user in df_pts['nome'].values:
+                senha_correta = str(df_pts[df_pts['nome'] == user]['senha'].values[0])
+                if senha == senha_correta:
+                    st.session_state.update({"autenticado": True, "unidade": user, "perfil": "pdv"})
+                    st.rerun()
+                else: st.error("Senha incorreta.")
+            else: st.error("Usuário não encontrado.")
+    st.stop()
+# ==================== 3. MENU LATERAL ====================
+st.sidebar.title("⚡ Flash Stop")
+st.sidebar.write(f"📍 **{st.session_state.unidade}**")
+
+opcoes = ["📊 Dashboard", "🛒 Self-Checkout", "💰 Entrada Mercadoria", "📦 Inventário", "💸 Despesas", "📂 Contabilidade", "📟 Configurações"] if st.session_state.perfil == "admin" else ["🛒 Self-Checkout", "📦 Inventário"]
+menu = st.sidebar.radio("Navegação", opcoes)
+
+if st.sidebar.button("🚪 Sair"):
+    st.session_state.autenticado = False
+    st.rerun()
+
+# ==================== 4. LÓGICA DAS TELAS ====================
+
+# ==================== ABA: DASHBOARD (MÉTRICAS + ALERTAS MULTI-PDV) ====================
+if menu == "📊 Dashboard":
+    st.header("📊 Painel de Controle Flash Stop")
+
+    # 1. Carregamento de Dados
+    df_v = carregar_dinamico("vendas")
+    df_d = carregar_dinamico("despesas")
+    df_estoque_local = carregar_dinamico("estoque_pdv") 
+
+    # --- PARTE A: MÉTRICAS FINANCEIRAS ---
+    st.subheader("💰 Resumo Financeiro")
+    if df_v is not None and not df_v.empty:
+        # Tratamento de dados numéricos
+        df_v['valor_bruto'] = pd.to_numeric(df_v['valor_bruto'], errors='coerce').fillna(0)
+        df_v['valor_liquido'] = pd.to_numeric(df_v['valor_liquido'], errors='coerce').fillna(0)
+        
+        # Cálculos Principais
+        bruto_total = df_v['valor_bruto'].sum()
+        liquido_cartao = df_v['valor_liquido'].sum()
+        cashback_total = bruto_total * 0.02
+        
+        gastos = 0.0
+        if df_d is not None and not df_d.empty and 'valor' in df_d.columns:
+            df_d['valor'] = pd.to_numeric(df_d['valor'], errors='coerce').fillna(0)
+            gastos = df_d['valor'].sum()
+
+        lucro_final = liquido_cartao - gastos - cashback_total
+
+        # Exibição das Métricas em 5 colunas
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Faturamento Bruto", f"R$ {bruto_total:,.2f}")
+        m2.metric("Despesas", f"R$ {gastos:,.2f}")
+        m3.metric("Cashback (2%)", f"R$ {cashback_total:,.2f}")
+        m4.metric("Líquido Cartão", f"R$ {liquido_cartao:,.2f}")
+        m5.metric("Lucro Real", f"R$ {lucro_final:,.2f}")
+
+        # Gráfico de Vendas Diárias
+        st.divider()
+        st.subheader("📈 Evolução de Vendas Diárias")
+        df_v['data'] = pd.to_datetime(df_v['data'], errors='coerce', dayfirst=True)
+        vendas_diarias = df_v.groupby(df_v['data'].dt.date)['valor_bruto'].sum()
+        st.area_chart(vendas_diarias, color="#32CD32")
+    else:
+        st.info("Aguardando dados de vendas para gerar o painel financeiro.")
+
+    st.divider()
+
+    # --- PARTE B: ALERTAS OPERACIONAIS (SISTEMA MULTI-PDV) ---
+    st.subheader("🚨 Alertas de Operação (Por Unidade)")
+    
+    if df_estoque_local is not None and not df_estoque_local.empty:
+        col_estoque, col_validade = st.columns(2)
+
+        with col_estoque:
+            st.markdown("#### ⚠️ Estoque Crítico")
+            
+            # Sanitização dos dados
+            df_estoque_local['quantidade'] = pd.to_numeric(df_estoque_local['quantidade'], errors='coerce').fillna(0)
+            df_estoque_local['minimo_alerta'] = pd.to_numeric(df_estoque_local['minimo_alerta'], errors='coerce').fillna(5)
+
+            # Filtro comparando estoque com limite da unidade
+            baixo = df_estoque_local[df_estoque_local['quantidade'] <= df_estoque_local['minimo_alerta']]
+            
+            if not baixo.empty:
+                for _, r in baixo.iterrows():
+                    st.error(f"📍 **{r['unidade']}** | **{r['nome']}**: {int(r['quantidade'])} un (Mín: {int(r['minimo_alerta'])})")
+            else:
+                st.success("✅ Estoque em dia em todos os PDVs.")
+
+        with col_validade:
+            st.markdown("#### 📅 Validades")
+            df_estoque_local['validade_dt'] = pd.to_datetime(df_estoque_local['validade'], dayfirst=True, errors='coerce')
+            hoje = datetime.now()
+            
+            vencidos = df_estoque_local[df_estoque_local['validade_dt'] < hoje]
+            vencendo_em_breve = df_estoque_local[(df_estoque_local['validade_dt'] >= hoje) & (df_estoque_local['validade_dt'] <= hoje + timedelta(days=7))]
+
+            if not vencidos.empty:
+                for _, r in vencidos.iterrows():
+                    st.error(f"📍 **{r['unidade']}** | **VENCIDO:** {r['nome']} ({r['validade']})")
+            
+            if not vencendo_em_breve.empty:
+                for _, r in vencendo_em_breve.iterrows():
+                    st.warning(f"📍 **{r['unidade']}** | **Vence em breve:** {r['nome']} ({r['validade']})")
+            
+            if vencidos.empty and vencendo_em_breve.empty:
+                st.success("✅ Validades em dia em todas as unidades.")
+    else:
+        st.info("Nenhum dado de estoque local encontrado para gerar alertas.")
+        
+
 # ==================== ABA: SELF-CHECKOUT (VERSÃO FINAL CORRIGIDA) ====================
 elif menu == "🛒 Self-Checkout":
     # 1. LOGO IDENTIDADE VISUAL (Fundo Preto, Raio Verde, Escrita exata)
@@ -554,4 +744,4 @@ elif menu == "📟 Configurações":
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("Verifique os dados da máquina e
+                    st.error("Verifique os dados da máquina e o vínculo com o PDV.")
