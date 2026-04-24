@@ -5,7 +5,13 @@ from datetime import datetime, timedelta
 import time
 from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
 import requests # Certifique-se de que o requests está no seu requirements.txt
+import streamlit as st
 
+st.set_page_config(
+    page_title="FlashStop PDV",
+    page_icon="logo.png", # O caminho para o seu arquivo de imagem
+    layout="wide"
+)
 def enviar_telegram(mensagem):
     # Substitua pelos seus dados reais
     TOKEN = "8318147830:AAG9xVf5VzouaGcuWxtcPfUFOCfgjdtK4Yk"
