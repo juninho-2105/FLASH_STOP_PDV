@@ -12,10 +12,8 @@ st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="
 # Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
 st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
 
-# CSS para botões ultra-compactos e ajustes de interface
-st.markdown("""
-    <style>
-    /* Botões menores no checkout */
+<style>
+    /* Mantendo apenas os ajustes dos botões */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
@@ -26,10 +24,9 @@ st.markdown("""
         font-weight: bold !important;
         font-size: 18px !important;
     }
-    /* Esconder branding do Streamlit conforme solicitado */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    
+    /* REATIVANDO OS ÍCONES: 
+       Removidas as linhas que escondiam o MainMenu, footer e header */
     </style>
 """, unsafe_allow_html=True)
 
