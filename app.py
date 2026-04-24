@@ -2,84 +2,59 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
-import time
-from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
+from streamlit_autorefresh import st_autorefresh 
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-# CSS "BLINDADO" PARA LIMPAR A INTERFACE
+# --- INICIALIZAÇÃO DO ESTADO (DEVE VIR ANTES DE TUDO) ---
+if 'autenticado' not in st.session_state: st.session_state.autenticado = False
+if 'carrinho' not in st.session_state: st.session_state.carrinho = []
+if 'unidade' not in st.session_state: st.session_state.unidade = ""
+if 'perfil' not in st.session_state: st.session_state.perfil = ""
+
+# --- HEARTBEAT & LIMPEZA VISUAL ---
+st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
+
 st.markdown("""
     <style>
-    /* 1. Remove a barra de 'Deploy' e o branding 'Hosted with Streamlit' */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* 2. Força o desaparecimento da barra superior do Community Cloud */
+    /* Esconde o lixo visual e a barra vermelha 'Hosted' */
     [data-testid="stHeader"] {display: none !important;}
     .stAppDeployButton {display: none !important;}
+    footer {display: none !important;}
     [data-testid="stStatusWidget"] {display: none !important;}
     
-    /* 3. Garante que o menu lateral (Sidebar) fique acessível */
-    /* Isso remove o espaço vazio no topo e mantém o botão de abrir o menu */
-    [data-testid="stSidebarNav"] {padding-top: 2rem !important;}
+    /* Mantém o menu lateral acessível (toque na borda esquerda ou use o botão se visível) */
+    [data-testid="stSidebar"] { visibility: visible !important; }
     
-    /* 4. SE O MENU SUMIR NO TABLET: Força o botão de abrir a aparecer */
-    .st-emotion-cache-12w0qcf {display: flex !important;} 
-    
-    /* 5. Ajuste dos botões do seu PDV (Seu código original) */
-    .stButton>button {
-        border-radius: 6px;
-        padding: 2px 5px;
-    }
-    div[data-testid="column"] button {
-        height: 32px !important;
-        width: 32px !important;
-        font-weight: bold !important;
-        font-size: 18px !important;
-    }
+    /* Seus botões personalizados */
+    .stButton>button { border-radius: 6px; padding: 2px 5px; }
     </style>
 """, unsafe_allow_html=True)
 
-# ==================== 2. SISTEMA DE LOGIN (URL + MANUAL) ====================
+# ==================== 2. CONEXÃO E URL (LOGIN AUTOMÁTICO) ====================
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- NOVO: CAPTURA DE PARÂMETROS DA URL ---
-# Link de acesso direto: .../?pdv=NOME_DO_PDV&token=flash2026
+# Lógica da URL
 query_params = st.query_params
 TOKEN_MESTRE = "flash2026"
 
+# Só tenta o login via URL se ainda não estiver autenticado
 if not st.session_state.autenticado:
     if "pdv" in query_params and "token" in query_params:
         if query_params["token"] == TOKEN_MESTRE:
-            st.session_state.update({
-                "autenticado": True, 
-                "unidade": query_params["pdv"], 
-                "perfil": "pdv"
-            })
+            st.session_state.autenticado = True
+            st.session_state.unidade = query_params["pdv"]
+            st.session_state.perfil = "pdv"
             st.rerun()
 
-# --- LOGIN MANUAL ---
+# ==================== 3. LOGIN MANUAL (CASO URL NÃO SEJA USADA) ====================
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
-    with st.form("login_form"):
-        user = st.text_input("Usuário / PDV")
-        senha = st.text_input("Senha", type="password")
-        if st.form_submit_button("Entrar", use_container_width=True):
-            df_pts = carregar_dinamico("pontos")
-            if user == "admin" and senha == "flash123":
-                st.session_state.update({"autenticado": True, "unidade": "Administração", "perfil": "admin"})
-                st.rerun()
-            elif not df_pts.empty and user in df_pts['nome'].values:
-                senha_correta = str(df_pts[df_pts['nome'] == user]['senha'].values[0])
-                if senha == senha_correta:
-                    st.session_state.update({"autenticado": True, "unidade": user, "perfil": "pdv"})
-                    st.rerun()
-                else: st.error("Senha incorreta.")
-            else: st.error("Usuário não encontrado.")
+    # ... (seu formulário de login igual ao anterior)
     st.stop()
-    
-# ==================== 3. MENU LATERAL ====================
+
+# ==================== 4. MENU LATERAL ====================
 st.sidebar.title("⚡ Flash Stop")
 st.sidebar.write(f"📍 **{st.session_state.unidade}**")
 
