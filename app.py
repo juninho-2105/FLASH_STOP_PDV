@@ -287,60 +287,28 @@ elif menu == "🛒 Self-Checkout":
 
         st.divider()
 
-        # 3. EXIBIÇÃO DO CARRINHO
+       # 3. EXIBIÇÃO DO CARRINHO (CORRIGIDO)
         if st.session_state.carrinho:
+            st.markdown("---")
             df_cart = pd.DataFrame(st.session_state.carrinho)
-            # Agrupa para mostrar "2x Produto" em vez de linhas repetidas
+            
+            # Criamos o resumo agrupado ANTES de começar a desenhar na tela
             resumo_cart = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
 
+            # Loop limpo para mostrar cada produto apenas uma vez com sua quantidade total
             for idx, row in resumo_cart.iterrows():
-                c_item, c_del = st.columns([5, 1])
-                c_item.write(f"**{row['qtd']}x** {row['produto']} — R$ {row['preco']:.2f}")
-                c_item, c_del = st.columns([5, 1])
-                c_item.write(f"**{row['qtd']}x** {row['produto']} — R$ {row['preco']:.2f}")
-                
-                # O BOTÃO DE EXCLUSÃO QUE FOI CORTADO:
-                if c_del.button("🗑️", key=f"del_{idx}"):
-                    for i, p in enumerate(st.session_state.carrinho):
-                        if p['produto'] == row['produto']:
-                            st.session_state.carrinho.pop(i)
-                            break
-                    st.rerun()
+                col_item, col_del = st.columns([5, 1])
+                with col_item:
+                    st.write(f"✅ **{row['qtd']}x** {row['produto']} — R$ {row['preco']:.2f} cada")
+                with col_del:
+                    # Chave única baseada no nome do produto para evitar duplicatas visuais
+                    if st.button("🗑️", key=f"btn_del_{row['produto']}"):
+                        # Remove todas as instâncias desse produto
+                        st.session_state.carrinho = [p for p in st.session_state.carrinho if p['produto'] != row['produto']]
+                        st.rerun()
 
-            # --- PARTE FINAL APÓS O LOOP ---
             total = df_cart['preco'].sum()
             st.markdown(f"<h1 style='text-align: center; color: #32CD32;'>TOTAL: R$ {total:.2f}</h1>", unsafe_allow_html=True)
-            
-            forma_pgto = st.radio("Forma de Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
-            
-            if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
-                try:
-                    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-                    nova_venda = pd.DataFrame([{
-                        "data": agora, 
-                        "unidade": st.session_state.unidade, 
-                        "valor_bruto": total, 
-                        "metodo": forma_pgto
-                    }])
-                    
-                    df_vendas_hist = carregar_dinamico("vendas")
-                    df_vendas_atualizado = pd.concat([df_vendas_hist, nova_venda], ignore_index=True)
-                    conn.update(worksheet="vendas", data=df_vendas_atualizado)
-                    
-                    enviar_telegram(f"⚡ <b>NOVA VENDA</b>\n📍 {st.session_state.unidade}\n💰 R$ {total:.2f}")
-
-                    st.success("Venda realizada!")
-                    st.balloons()
-                    st.session_state.carrinho = []
-                    time.sleep(2)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
-
-            if st.button("❌ Cancelar Pedido"):
-                st.session_state.carrinho = []
-                st.rerun()
-
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
     st.header("💰 Gestão de Estoque e Preços")
