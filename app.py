@@ -8,14 +8,27 @@ from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip ins
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-# --- NOVO: HEARTBEAT (Anti-inatividade) ---
-# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
-st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
-
-# CSS para botões ultra-compactos e ajustes de interface
+# CSS "BLINDADO" PARA LIMPAR A INTERFACE
 st.markdown("""
     <style>
-    /* Botões menores no checkout */
+    /* 1. Remove a barra de 'Deploy' e o branding 'Hosted with Streamlit' */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* 2. Força o desaparecimento da barra superior do Community Cloud */
+    [data-testid="stHeader"] {display: none !important;}
+    .stAppDeployButton {display: none !important;}
+    [data-testid="stStatusWidget"] {display: none !important;}
+    
+    /* 3. Garante que o menu lateral (Sidebar) fique acessível */
+    /* Isso remove o espaço vazio no topo e mantém o botão de abrir o menu */
+    [data-testid="stSidebarNav"] {padding-top: 2rem !important;}
+    
+    /* 4. SE O MENU SUMIR NO TABLET: Força o botão de abrir a aparecer */
+    .st-emotion-cache-12w0qcf {display: flex !important;} 
+    
+    /* 5. Ajuste dos botões do seu PDV (Seu código original) */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
@@ -26,27 +39,8 @@ st.markdown("""
         font-weight: bold !important;
         font-size: 18px !important;
     }
-    /* Esconder branding do Streamlit conforme solicitado */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
-
-# Inicialização de Estados de Sessão
-if 'autenticado' not in st.session_state: st.session_state.autenticado = False
-if 'carrinho' not in st.session_state: st.session_state.carrinho = []
-if 'unidade' not in st.session_state: st.session_state.unidade = ""
-if 'perfil' not in st.session_state: st.session_state.perfil = ""
-
-# Conexão com Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-def carregar_dinamico(aba):
-    try:
-        return conn.read(worksheet=aba, ttl=0)
-    except Exception:
-        return pd.DataFrame()
 
 # ==================== 2. SISTEMA DE LOGIN (URL + MANUAL) ====================
 
