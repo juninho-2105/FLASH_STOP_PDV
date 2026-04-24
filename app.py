@@ -7,6 +7,25 @@ from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip ins
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
+# 2. COLOQUE O BLOCO AQUI (O "MAQUIADOR" DO APP)
+st.markdown("""
+    <style>
+    /* Esconde a marca d'água 'Hosted with Streamlit' */
+    footer {visibility: hidden;}
+    
+    /* Esconde botões de deploy e menu sem quebrar o acesso lateral */
+    header {visibility: hidden;}
+    .stAppDeployButton {display: none !important;}
+    [data-testid="stStatusWidget"] {display: none !important;}
+
+    /* Seus estilos de botões do PDV */
+    .stButton>button {
+        border-radius: 6px;
+        padding: 2px 5px;
+    }
+    /* ... o restante do seu CSS atual ... */
+    </style>
+""", unsafe_allow_html=True)
 
 # --- NOVO: HEARTBEAT (Anti-inatividade) ---
 # Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
