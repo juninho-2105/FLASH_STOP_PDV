@@ -241,7 +241,7 @@ elif menu == "🛒 Self-Checkout":
         col_ativa = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
         
         st.subheader("🛍️ Adicionar Produto")
- col_in, col_bt = st.columns([3, 1])
+       col_in, col_bt = st.columns([3, 1])
         
         with col_in:
             p_selecionado = st.selectbox(
