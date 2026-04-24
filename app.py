@@ -250,23 +250,6 @@ elif menu == "🛒 Self-Checkout":
                 key="input_checkout_v4"
             )
         
-        with col_bt:
-            if st.button("➕ ADICIONAR", use_container_width=True, type="secondary"):
-                if p_selecionado:
-                    dados = df_p[df_p['nome'] == p_selecionado].iloc[0]
-                    # Aplica a sanitização aqui para garantir o valor unitário correto
-                    preco_limpo = sanitizar_preco_venda(dados[col_ativa])
-                    
-                    st.session_state.carrinho.append({
-                        "produto": dados['nome'], 
-                        "preco": preco_limpo,
-                        "unidade": st.session_state.unidade
-                    })
-                    st.toast(f"{p_selecionado} adicionado!")
-                    time.sleep(0.1)
-                    st.rerun()
-
-        st.divider()
 
         # 4. EXIBIÇÃO DO CARRINHO E TOTAL
         if st.session_state.carrinho:
