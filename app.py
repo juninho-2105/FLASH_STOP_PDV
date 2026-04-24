@@ -7,11 +7,12 @@ from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip ins
 import requests # Certifique-se de que o requests está no seu requirements.txt
 import streamlit as st
 
-st.set_page_config(
-    page_title="FlashStop PDV",
-    page_icon="logo.png", # O caminho para o seu arquivo de imagem
-    layout="wide"
-)
+import streamlit as st
+
+# 1. Configuração da aba (sempre o primeiro)
+st.set_page_config(page_title="FlashStop PDV", page_icon="logo.png")
+
+# 2. O Logo no topo
 st.image("logo.png", width=200)
 
 def enviar_telegram(mensagem):
