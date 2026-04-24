@@ -268,8 +268,7 @@ elif menu == "🛒 Self-Checkout":
             if st.button("➕ ADD", use_container_width=True, type="secondary", key="btn_add_v6"):
                 if p_selecionado:
                     try:
-                        # Procure esta parte no seu código dentro do botão ADD:
-try:
+ 
     # 1. Busca o valor bruto
     valor_bruto = df_p.loc[df_p['nome'] == p_selecionado, 'preco_venda'].values[0]
     
