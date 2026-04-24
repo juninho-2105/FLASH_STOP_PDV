@@ -48,10 +48,24 @@ st.markdown("""
 # Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
 st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
 
-# CSS para botões ultra-compactos e ajustes de interface
 st.markdown("""
     <style>
-    /* Botões menores no checkout */
+    /* 1. Esconde o botão de Deploy, Footer e o status de carregamento */
+    .stAppDeployButton {display: none !important;}
+    footer {visibility: hidden !important;}
+    [data-testid="stStatusWidget"] {display: none !important;}
+    
+    /* 2. Esconde TODOS os botões da barra superior por padrão */
+    [data-testid="stHeader"] div {
+        visibility: hidden;
+    }
+
+    /* 3. EXCEÇÃO: Torna visível APENAS o botão do menu (hambúrguer) */
+    [data-testid="stHeader"] [data-testid="stSidebarCollapse"] {
+        visibility: visible !important;
+    }
+
+    /* 4. Estilos dos botões do checkout */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
@@ -62,12 +76,9 @@ st.markdown("""
         font-weight: bold !important;
         font-size: 18px !important;
     }
-    /* Esconder branding do Streamlit conforme solicitado */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
+
 
 # Inicialização de Estados de Sessão
 if 'autenticado' not in st.session_state: st.session_state.autenticado = False
