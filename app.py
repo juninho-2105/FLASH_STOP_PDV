@@ -3,69 +3,31 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
-from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
+from streamlit_autorefresh import st_autorefresh 
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
-# --- INICIALIZAÇÃO DE ESTADOS (Mantenha aqui para evitar o erro anterior) ---
+
+# --- INICIALIZAÇÃO DE ESTADOS (Evita erro de AttributeError) ---
 if 'autenticado' not in st.session_state: st.session_state.autenticado = False
 if 'carrinho' not in st.session_state: st.session_state.carrinho = []
 if 'unidade' not in st.session_state: st.session_state.unidade = ""
 if 'perfil' not in st.session_state: st.session_state.perfil = ""
 
-st.markdown("""
-    <style>
-    /* 1. Esconde o botão de Deploy, Footer e o status de carregamento */
-    .stAppDeployButton {display: none !important;}
-    footer {visibility: hidden !important;}
-    [data-testid="stStatusWidget"] {display: none !important;}
-    
-    /* 2. Esconde TODOS os botões da barra superior por padrão */
-    [data-testid="stHeader"] div {
-        visibility: hidden;
-    }
-
-    /* 3. EXCEÇÃO: Torna visível APENAS o botão do menu (hambúrguer) */
-    [data-testid="stHeader"] [data-testid="stSidebarCollapse"] {
-        visibility: visible !important;
-    }
-
-    /* 4. Estilos dos botões do checkout */
-    .stButton>button {
-        border-radius: 6px;
-        padding: 2px 5px;
-    }
-    div[data-testid="column"] button {
-        height: 32px !important;
-        width: 32px !important;
-        font-weight: bold !important;
-        font-size: 18px !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- NOVO: HEARTBEAT (Anti-inatividade) ---
-# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
+# --- HEARTBEAT (Anti-inatividade) ---
 st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
 
+# --- CSS: VOLTANDO COM O MENU E ÍCONES ---
 st.markdown("""
     <style>
-    /* 1. Esconde o botão de Deploy, Footer e o status de carregamento */
+    /* 1. Mantém apenas a remoção do botão de Deploy e o Footer para ficar profissional */
     .stAppDeployButton {display: none !important;}
     footer {visibility: hidden !important;}
-    [data-testid="stStatusWidget"] {display: none !important;}
-    
-    /* 2. Esconde TODOS os botões da barra superior por padrão */
-    [data-testid="stHeader"] div {
-        visibility: hidden;
-    }
 
-    /* 3. EXCEÇÃO: Torna visível APENAS o botão do menu (hambúrguer) */
-    [data-testid="stHeader"] [data-testid="stSidebarCollapse"] {
-        visibility: visible !important;
-    }
+    /* 2. Garante que o Header (onde ficam os ícones e o menu) esteja visível */
+    header {visibility: visible !important;}
 
-    /* 4. Estilos dos botões do checkout */
+    /* 3. Ajustes de botões do checkout (seu padrão original) */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
@@ -78,7 +40,6 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
 
 # Inicialização de Estados de Sessão
 if 'autenticado' not in st.session_state: st.session_state.autenticado = False
