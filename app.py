@@ -185,74 +185,54 @@ if menu == "📊 Dashboard":
         st.info("Nenhum dado de estoque local encontrado para gerar alertas.")
         
 
-# ==================== ABA: SELF-CHECKOUT (VERSÃO FINAL CORRIGIDA) ====================
+# ==================== ABA: SELF-CHECKOUT ====================
 elif menu == "🛒 Self-Checkout":
-    # 1. LOGO IDENTIDADE VISUAL (Fundo Preto, Raio Verde, Escrita exata)
+    # 1. LOGO IDENTIDADE VISUAL
     st.markdown("""
         <style>
-        .logo-container {
-            background-color: black;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: 'Arial Black', sans-serif;
-        }
-        .logo-lightning {
-            color: #32CD32;
-            font-size: 70px;
-            margin-right: 15px;
-        }
-        .logo-text-block {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            line-height: 0.9;
-        }
-        .logo-flash {
-            color: #32CD32;
-            font-size: 50px;
-            text-transform: lowercase;
-            font-weight: bold;
-        }
-        .logo-stop {
-            color: white;
-            font-size: 50px;
-            text-transform: lowercase;
-            font-weight: bold;
-        }
-        .logo-convenience {
-            color: white;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            margin-top: 5px;
-        }
+        .logo-container { background-color: black; padding: 25px; border-radius: 15px; text-align: center; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; font-family: 'Arial Black', sans-serif; }
+        .logo-lightning { color: #32CD32; font-size: 70px; margin-right: 15px; }
+        .logo-flash { color: #32CD32; font-size: 50px; text-transform: lowercase; font-weight: bold; }
+        .logo-stop { color: white; font-size: 50px; text-transform: lowercase; font-weight: bold; }
         </style>
         <div class="logo-container">
             <div class="logo-lightning">⚡</div>
-            <div class="logo-text-block">
+            <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 0.9;">
                 <div class="logo-flash">flash</div>
                 <div class="logo-stop">stop</div>
-                <div class="logo-convenience">CONVENIÊNCIA</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    # 2. FUNÇÃO DE TRATAMENTO DE PREÇO (Resolve o erro de 10x o valor)
-    def sanitizar_preco_venda(valor):
-        try:
-            # Converte para string e limpa tudo que não é número ou pontuação
-            v = str(valor).replace('R$', '').strip()
-            # Se vier algo como "1.200,50", remove o ponto e troca a vírgula
-            if ',' in v:
-                v = v.replace('.', '').replace(',', '.')
-            return float(v)
-        except:
-            return 0.0
+    # 2. CARREGAMENTO E PREPARAÇÃO
+    df_p = carregar_dinamico("produtos")
+    
+    if df_p is not None and not df_p.empty:
+        st.subheader("🛍️ Adicionar Produto")
+        
+        # AJUSTE: Colunas alinhadas para o botão ficar ao lado da busca
+        col_in, col_bt = st.columns([4, 1])
+        
+        with col_in:
+            p_selecionado = st.selectbox(
+                "Produto", 
+                [""] + df_p['nome'].tolist(), 
+                key="input_checkout_v4",
+                label_visibility="collapsed"
+            )
+        
+        with col_bt:
+            if st.button("➕ ADD", use_container_width=True, type="secondary"):
+                if p_selecionado:
+                    # Lógica simplificada de adição (use a sua sanitização aqui)
+                    st.session_state.carrinho.append({
+                        "produto": p_selecionado, 
+                        "preco": 0.0, # Aqui entra sua função de preço
+                        "unidade": st.session_state.unidade
+                    })
+                    st.rerun()
+
+        st.divider()
 
     # 3. CARREGAMENTO E PREPARAÇÃO DOS PRODUTOS
     df_p = carregar_dinamico("produtos")
