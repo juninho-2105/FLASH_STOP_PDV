@@ -2,59 +2,89 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
-from streamlit_autorefresh import st_autorefresh 
+import time
+from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-# --- INICIALIZAÇÃO DO ESTADO (DEVE VIR ANTES DE TUDO) ---
+# --- NOVO: HEARTBEAT (Anti-inatividade) ---
+# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
+st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
+
+# CSS para botões ultra-compactos e ajustes de interface
+st.markdown("""
+    <style>
+    /* Botões menores no checkout */
+    .stButton>button {
+        border-radius: 6px;
+        padding: 2px 5px;
+    }
+    div[data-testid="column"] button {
+        height: 32px !important;
+        width: 32px !important;
+        font-weight: bold !important;
+        font-size: 18px !important;
+    }
+    /* Esconder branding do Streamlit conforme solicitado */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
+
+# Inicialização de Estados de Sessão
 if 'autenticado' not in st.session_state: st.session_state.autenticado = False
 if 'carrinho' not in st.session_state: st.session_state.carrinho = []
 if 'unidade' not in st.session_state: st.session_state.unidade = ""
 if 'perfil' not in st.session_state: st.session_state.perfil = ""
 
-# --- HEARTBEAT & LIMPEZA VISUAL ---
-st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
-
-st.markdown("""
-    <style>
-    /* Esconde o lixo visual e a barra vermelha 'Hosted' */
-    [data-testid="stHeader"] {display: none !important;}
-    .stAppDeployButton {display: none !important;}
-    footer {display: none !important;}
-    [data-testid="stStatusWidget"] {display: none !important;}
-    
-    /* Mantém o menu lateral acessível (toque na borda esquerda ou use o botão se visível) */
-    [data-testid="stSidebar"] { visibility: visible !important; }
-    
-    /* Seus botões personalizados */
-    .stButton>button { border-radius: 6px; padding: 2px 5px; }
-    </style>
-""", unsafe_allow_html=True)
-
-# ==================== 2. CONEXÃO E URL (LOGIN AUTOMÁTICO) ====================
+# Conexão com Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Lógica da URL
+def carregar_dinamico(aba):
+    try:
+        return conn.read(worksheet=aba, ttl=0)
+    except Exception:
+        return pd.DataFrame()
+
+# ==================== 2. SISTEMA DE LOGIN (URL + MANUAL) ====================
+
+# --- NOVO: CAPTURA DE PARÂMETROS DA URL ---
+# Link de acesso direto: .../?pdv=NOME_DO_PDV&token=flash2026
 query_params = st.query_params
 TOKEN_MESTRE = "flash2026"
 
-# Só tenta o login via URL se ainda não estiver autenticado
 if not st.session_state.autenticado:
     if "pdv" in query_params and "token" in query_params:
         if query_params["token"] == TOKEN_MESTRE:
-            st.session_state.autenticado = True
-            st.session_state.unidade = query_params["pdv"]
-            st.session_state.perfil = "pdv"
+            st.session_state.update({
+                "autenticado": True, 
+                "unidade": query_params["pdv"], 
+                "perfil": "pdv"
+            })
             st.rerun()
 
-# ==================== 3. LOGIN MANUAL (CASO URL NÃO SEJA USADA) ====================
+# --- LOGIN MANUAL ---
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
-    # ... (seu formulário de login igual ao anterior)
+    with st.form("login_form"):
+        user = st.text_input("Usuário / PDV")
+        senha = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar", use_container_width=True):
+            df_pts = carregar_dinamico("pontos")
+            if user == "admin" and senha == "flash123":
+                st.session_state.update({"autenticado": True, "unidade": "Administração", "perfil": "admin"})
+                st.rerun()
+            elif not df_pts.empty and user in df_pts['nome'].values:
+                senha_correta = str(df_pts[df_pts['nome'] == user]['senha'].values[0])
+                if senha == senha_correta:
+                    st.session_state.update({"autenticado": True, "unidade": user, "perfil": "pdv"})
+                    st.rerun()
+                else: st.error("Senha incorreta.")
+            else: st.error("Usuário não encontrado.")
     st.stop()
-
-# ==================== 4. MENU LATERAL ====================
+# ==================== 3. MENU LATERAL ====================
 st.sidebar.title("⚡ Flash Stop")
 st.sidebar.write(f"📍 **{st.session_state.unidade}**")
 
@@ -64,6 +94,7 @@ menu = st.sidebar.radio("Navegação", opcoes)
 if st.sidebar.button("🚪 Sair"):
     st.session_state.autenticado = False
     st.rerun()
+
 # ==================== 4. LÓGICA DAS TELAS ====================
 
 # ==================== ABA: DASHBOARD (MÉTRICAS + ALERTAS MULTI-PDV) ====================
