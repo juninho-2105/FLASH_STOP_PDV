@@ -15,21 +15,22 @@ if 'perfil' not in st.session_state: st.session_state.perfil = ""
 
 st.markdown("""
     <style>
-    /* 1. Remove branding e botões desnecessários */
+    /* 1. Esconde o botão de Deploy, Footer e o status de carregamento */
     .stAppDeployButton {display: none !important;}
     footer {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {display: none !important;}
     
-    /* 2. Deixa o topo transparente mas mantém o botão de MENU (hambúrguer) */
-    [data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
+    /* 2. Esconde TODOS os botões da barra superior por padrão */
+    [data-testid="stHeader"] div {
+        visibility: hidden;
     }
-    [data-testid="stHeader"] svg {
-        fill: #31333F !important; /* Cor cinza/preta para o ícone aparecer */
+
+    /* 3. EXCEÇÃO: Torna visível APENAS o botão do menu (hambúrguer) */
+    [data-testid="stHeader"] [data-testid="stSidebarCollapse"] {
         visibility: visible !important;
     }
 
-    /* 3. Estilos dos botões do checkout */
+    /* 4. Estilos dos botões do checkout */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
@@ -42,6 +43,7 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
 # --- NOVO: HEARTBEAT (Anti-inatividade) ---
 # Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
 st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
