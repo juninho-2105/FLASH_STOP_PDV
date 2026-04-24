@@ -4,16 +4,13 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
 from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
-
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-# --- NOVO: HEARTBEAT (Anti-inatividade) ---
-# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
-st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
-
-<style>
-    /* Mantendo apenas os ajustes dos botões */
+# CSS para botões ultra-compactos (Certifique-se de que as aspas triplas envolvam o CSS)
+st.markdown("""
+    <style>
+    /* Botões menores no checkout */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
@@ -24,11 +21,14 @@ st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
         font-weight: bold !important;
         font-size: 18px !important;
     }
-    
-    /* REATIVANDO OS ÍCONES: 
-       Removidas as linhas que escondiam o MainMenu, footer e header */
+    /* Os comandos que escondiam o menu foram removidos aqui */
     </style>
 """, unsafe_allow_html=True)
+
+# --- NOVO: HEARTBEAT (Anti-inatividade) ---
+# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
+st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
+
 
 # Inicialização de Estados de Sessão
 if 'autenticado' not in st.session_state: st.session_state.autenticado = False
