@@ -267,17 +267,23 @@ elif menu == "🛒 Self-Checkout":
         with col_bt:
             if st.button("➕ ADD", use_container_width=True, type="secondary", key="btn_add_v6"):
                 if p_selecionado:
-                    try:
- 
-    # 1. Busca o valor bruto
-    valor_bruto = df_p.loc[df_p['nome'] == p_selecionado, 'preco_venda'].values[0]
+            try:
+                valor_bruto = df_p.loc[df_p['nome'] == p_selecionado, 'preco_venda'].values[0]
     
-    # 2. Limpa o valor (remove R$, espaços e troca vírgula por ponto)
-    if isinstance(valor_bruto, str):
-        valor_limpo = valor_bruto.replace('R$', '').replace('.', '').replace(',', '.').strip()
-        preco_final = float(valor_limpo)
-    else:
-        preco_final = float(valor_bruto)
+               if isinstance(valor_bruto, str):
+               valor_limpo = valor_bruto.replace('R$', '').replace('.', '').replace(',', '.').strip()
+               preco_final = float(valor_limpo)
+           else:
+               preco_final = float(valor_bruto)
+
+           st.session_state.carrinho.append({
+              "produto": p_selecionado, 
+              "preco": preco_final,
+              "unidade": st.session_state.unidade
+    })
+    st.rerun()
+except Exception as e:
+    st.error(f"Erro ao ler preço: {e}")
 
     # 3. Adiciona ao carrinho
     st.session_state.carrinho.append({
@@ -288,6 +294,7 @@ elif menu == "🛒 Self-Checkout":
     st.rerun()
 except Exception as e:
     st.error(f"Erro ao ler preço do inventário: {e}")
+
         # 3. CARRINHO E TOTAL
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
