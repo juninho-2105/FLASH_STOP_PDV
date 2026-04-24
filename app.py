@@ -236,23 +236,7 @@ if menu == "📊 Dashboard":
         
 # ==================== ABA: SELF-CHECKOUT (VERSÃO FINAL CORRIGIDA) ====================
 elif menu == "🛒 Self-Checkout":
-    # 1. ESTILIZAÇÃO E LOGO (Visual Flash Stop)
-    st.markdown("""
-        <style>
-        .logo-container { background-color: black; padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; }
-        .logo-lightning { color: #32CD32; font-size: 50px; margin-right: 15px; }
-        .logo-text-block { display: flex; flex-direction: column; align-items: flex-start; line-height: 0.9; }
-        .logo-flash { color: #32CD32; font-size: 40px; text-transform: lowercase; font-weight: bold; font-family: 'Arial Black', sans-serif; }
-        .logo-stop { color: white; font-size: 40px; text-transform: lowercase; font-weight: bold; font-family: 'Arial Black', sans-serif; }
-        </style>
-        <div class="logo-container">
-            <div class="logo-lightning">⚡</div>
-            <div class="logo-text-block">
-                <div class="logo-flash">flash</div>
-                <div class="logo-stop">stop</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+   
 
     # 2. CARREGAMENTO DOS PRODUTOS
     df_p = carregar_dinamico("produtos")
