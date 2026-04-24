@@ -4,6 +4,22 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
 from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
+import requests # Certifique-se de que o requests está no seu requirements.txt
+
+def enviar_telegram(mensagem):
+    # Substitua pelos seus dados reais
+    TOKEN = "8318147830:AAG9xVf5VzouaGcuWxtcPfUFOCfgjdtK4Yk"
+    CHAT_ID = "2026386754"
+    
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": mensagem, "parse_mode": "HTML"}
+    
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Erro ao enviar Telegram: {e}")
+
+
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
