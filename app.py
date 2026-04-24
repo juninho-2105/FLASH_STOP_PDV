@@ -200,32 +200,18 @@ if menu == "📊 Dashboard":
     else:
         st.info("Nenhum dado de estoque local encontrado para gerar alertas.")
         
-
-# ==================== ABA: SELF-CHECKOUT (VERSÃO ATUALIZADA) ====================
+# ==================== ABA: SELF-CHECKOUT (COM ALERTAS) ====================
 elif menu == "🛒 Self-Checkout":
-    # 1. LOGO IDENTIDADE VISUAL
+    # 1. ESTILIZAÇÃO E LOGO
     st.markdown("""
         <style>
-        .logo-container {
-            background-color: black;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+        .logo-container { background-color: black; padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; }
         .logo-lightning { color: #32CD32; font-size: 50px; margin-right: 15px; }
         .logo-text-block { display: flex; flex-direction: column; align-items: flex-start; line-height: 0.9; }
         .logo-flash { color: #32CD32; font-size: 40px; text-transform: lowercase; font-weight: bold; font-family: 'Arial Black', sans-serif; }
         .logo-stop { color: white; font-size: 40px; text-transform: lowercase; font-weight: bold; font-family: 'Arial Black', sans-serif; }
         
-        /* Ajuste de alinhamento para a barra de busca e botão */
-        [data-testid="column"] {
-            display: flex;
-            align-items: flex-end;
-        }
+        [data-testid="column"] { display: flex; align-items: flex-end; }
         </style>
         <div class="logo-container">
             <div class="logo-lightning">⚡</div>
@@ -236,65 +222,51 @@ elif menu == "🛒 Self-Checkout":
         </div>
     """, unsafe_allow_html=True)
 
-    # 2. CARREGAMENTO DE DADOS
+    # 2. BUSCA DE PRODUTOS E PREÇOS
     df_p = carregar_dinamico("produtos")
     
     if df_p is not None and not df_p.empty:
-        # Garantir que as colunas estejam em minúsculo para evitar erro de busca
         df_p.columns = [c.lower().strip() for c in df_p.columns]
-        
         st.subheader("🛍️ Adicionar Produto")
         
-        # Colunas com proporção para tablet (Busca larga, Botão estreito)
         col_in, col_bt = st.columns([4, 1])
         
         with col_in:
             p_selecionado = st.selectbox(
-                "Pesquisar produto", 
+                "Pesquisar", 
                 [""] + sorted(df_p['nome'].unique().tolist()), 
-                key="v5_busca_checkout", # Chave única para evitar erro de duplicação
+                key="v6_checkout_key", # Chave única atualizada
                 label_visibility="collapsed"
             )
         
         with col_bt:
-            if st.button("➕ ADD", use_container_width=True, type="secondary", key="btn_add_checkout"):
+            if st.button("➕ ADD", use_container_width=True, type="secondary", key="btn_add_v6"):
                 if p_selecionado:
                     try:
-                        # BUSCA O PREÇO: Procura o valor na coluna 'preco_venda' para o produto selecionado
-                        # Se sua coluna no Sheets tiver outro nome, ajuste aqui abaixo:
-                        preco_bruto = df_p.loc[df_p['nome'] == p_selecionado, 'preco_venda'].values[0]
-                        
-                        # Limpeza de caracteres caso o Sheets envie como string (ex: "R$ 5,00")
-                        if isinstance(preco_bruto, str):
-                            preco_final = float(preco_bruto.replace('R$', '').replace(',', '.').strip())
-                        else:
-                            preco_final = float(preco_bruto)
+                        # Puxa o preço da coluna preco_venda
+                        valor = df_p.loc[df_p['nome'] == p_selecionado, 'preco_venda'].values[0]
+                        preco_limpo = float(str(valor).replace('R$', '').replace(',', '.').strip())
 
-                        # Adiciona ao carrinho
                         st.session_state.carrinho.append({
                             "produto": p_selecionado, 
-                            "preco": preco_final,
+                            "preco": preco_limpo,
                             "unidade": st.session_state.unidade
                         })
-                        st.toast(f"{p_selecionado} adicionado!")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao buscar preço: {e}")
+                    except:
+                        st.error("Erro ao ler preço do inventário.")
 
         st.divider()
 
-        # 3. EXIBIÇÃO DO CARRINHO
+        # 3. CARRINHO E TOTAL
         if st.session_state.carrinho:
             df_cart = pd.DataFrame(st.session_state.carrinho)
-            
-            # Agrupar para mostrar quantidades (ex: 2x Coca-Cola)
             resumo = df_cart.groupby('produto').agg({'preco': 'first', 'produto': 'count'}).rename(columns={'produto': 'qtd'}).reset_index()
 
             for idx, row in resumo.iterrows():
                 c_item, c_del = st.columns([5, 1])
                 c_item.write(f"**{row['qtd']}x** {row['produto']} — R$ {row['preco']:.2f}")
                 if c_del.button("🗑️", key=f"del_{idx}"):
-                    # Remove apenas a primeira ocorrência do item clicado
                     for i, p in enumerate(st.session_state.carrinho):
                         if p['produto'] == row['produto']:
                             st.session_state.carrinho.pop(i)
@@ -304,39 +276,44 @@ elif menu == "🛒 Self-Checkout":
             total = df_cart['preco'].sum()
             st.markdown(f"<h1 style='text-align: center; color: #32CD32;'>TOTAL: R$ {total:.2f}</h1>", unsafe_allow_html=True)
             
-            # 4. FINALIZAÇÃO
             forma_pgto = st.radio("Pagamento:", ["Pix", "Débito", "Crédito"], horizontal=True)
             
+            # 4. FINALIZAÇÃO COM ALERTA NO CELULAR
             if st.button("🏁 FINALIZAR COMPRA", use_container_width=True, type="primary"):
-                # Lógica de salvar no Sheets (vendas)
-                venda_row = pd.DataFrame([{
-                    "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                    "unidade": st.session_state.unidade,
-                    "valor_bruto": total,
-                    "forma_pgto": forma_pgto
-                }])
-                
-                # Envia para a aba 'vendas'
                 try:
-                    df_vendas_antigo = carregar_dinamico("vendas")
-                    df_vendas_novo = pd.concat([df_vendas_antigo, venda_row], ignore_index=True)
+                    # Preparar dados para o Sheets
+                    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    venda_row = pd.DataFrame([{"data": agora, "unidade": st.session_state.unidade, "valor": total, "pgto": forma_pgto}])
+                    
+                    # Salva no Google Sheets
+                    df_vendas = carregar_dinamico("vendas")
+                    df_vendas_novo = pd.concat([df_vendas, venda_row], ignore_index=True)
                     conn.update(worksheet="vendas", data=df_vendas_novo)
                     
-                    st.success("Venda registrada com sucesso!")
+                    # --- DISPARA NOTIFICAÇÃO PARA O CELULAR ---
+                    msg_venda = (
+                        f"<b>⚡ VENDA REALIZADA - FLASH STOP</b>\n\n"
+                        f"📍 <b>Unidade:</b> {st.session_state.unidade}\n"
+                        f"💰 <b>Total:</b> R$ {total:.2f}\n"
+                        f"💳 <b>Método:</b> {forma_pgto}\n"
+                        f"⏰ <b>Hora:</b> {agora}"
+                    )
+                    enviar_telegram(msg_venda)
+                    # ------------------------------------------
+
+                    st.success("Venda concluída!")
                     st.balloons()
                     st.session_state.carrinho = []
                     time.sleep(2)
                     st.rerun()
-                except:
-                    st.error("Erro ao salvar venda. Verifique a conexão.")
+                except Exception as e:
+                    st.error(f"Erro ao processar venda: {e}")
 
-            if st.button("❌ Cancelar Tudo", use_container_width=True):
+            if st.button("❌ Cancelar"):
                 st.session_state.carrinho = []
                 st.rerun()
         else:
-            st.info("Carrinho vazio. Selecione um produto acima.")
-    else:
-        st.warning("Nenhum produto cadastrado no catálogo.")
+            st.info("Aguardando produtos...")
 
 # --- ENTRADA DE MERCADORIA E NOVO CADASTRO ---
 elif menu == "💰 Entrada Mercadoria":
