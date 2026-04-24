@@ -401,25 +401,29 @@ elif menu == "💰 Entrada Mercadoria":
                     st.error("O nome do produto é obrigatório.")
                     
 
-# ==================== ABA: INVENTÁRIO (MULTI-PDV) ====================
+# ==================== ABA: INVENTÁRIO (MULTI-PDV - CORRIGIDA) ====================
 elif menu == "📦 Inventário":
     st.header("📦 Gestão de Estoque Multi-PDV")
     
     # 1. CARREGAMENTO DOS DADOS
-    df_geral = carregar_dinamico("produtos")      # Catálogo Global de Itens
-    df_estoque = carregar_dinamico("estoque_pdv") # Estoque por Unidade
-    df_vendas = carregar_dinamico("vendas")       # Para identificar PDVs ativos
-    
-    # 2. BUSCA DINÂMICA DE PDVs CADASTRADOS
-    # O sistema olha para onde já houve vendas ou onde já existe estoque
+    df_geral = carregar_dinamico("produtos")      
+    df_estoque = carregar_dinamico("estoque_pdv") 
+    df_vendas = carregar_dinamico("vendas")       
+
+    # --- AUTO-CORREÇÃO DE COLUNAS (Evita o KeyError) ---
+    if df_estoque is not None and not df_estoque.empty:
+        df_estoque.columns = [c.lower().strip() for c in df_estoque.columns]
+    if df_vendas is not None and not df_vendas.empty:
+        df_vendas.columns = [c.lower().strip() for c in df_vendas.columns]
+
+    # 2. BUSCA DINÂMICA DE PDVs
     unidades_vendas = df_vendas['unidade'].unique().tolist() if df_vendas is not None and 'unidade' in df_vendas.columns else []
     unidades_estoque = df_estoque['unidade'].unique().tolist() if df_estoque is not None and 'unidade' in df_estoque.columns else []
     
-    # Une as listas e remove nomes duplicados
     unidades_cadastradas = sorted(list(set(unidades_vendas + unidades_estoque)))
     
     if not unidades_cadastradas:
-        unidades_cadastradas = ["Unidade Padrão"] # Fallback caso não haja nada cadastrado
+        unidades_cadastradas = ["Flash Stop 01"] # Unidade padrão inicial
 
     aba_geral, aba_unidade = st.tabs(["🌎 Catálogo Geral", "📍 Estoque por PDV"])
 
@@ -427,85 +431,68 @@ elif menu == "📦 Inventário":
     with aba_geral:
         st.subheader("Configuração Global de Produtos")
         if df_geral is not None and not df_geral.empty:
+            df_geral.columns = [c.lower().strip() for c in df_geral.columns] # Normaliza colunas
             st.dataframe(df_geral[["nome", "preco_venda", "categoria"]], use_container_width=True, hide_index=True)
-            st.info("💡 Produtos cadastrados aqui aparecem em todos os PDVs.")
         else:
             st.warning("Cadastre produtos no catálogo geral primeiro.")
 
-    # --- ABA 2: ESTOQUE POR PDV (Ajuste Individual) ---
+    # --- ABA 2: ESTOQUE POR PDV ---
     with aba_unidade:
-        # Puxa automaticamente os PDVs já cadastrados
         unidade_selecionada = st.selectbox("Selecione o PDV para gerir:", unidades_cadastradas)
         
-        # Filtra os dados da unidade escolhida
-        df_local = df_estoque[df_estoque['unidade'] == unidade_selecionada] if df_estoque is not None else pd.DataFrame()
-        
-        # LÓGICA DE IMPORTAÇÃO: Garante que itens novos do Geral apareçam aqui
-        if df_geral is not None and 'nome' in df_geral.columns:
-            produtos_faltantes = [p for p in df_geral['nome'].tolist() if p not in df_local['nome'].tolist()]
+        # Filtro Blindado
+        if df_estoque is not None and 'unidade' in df_estoque.columns:
+            df_local = df_estoque[df_estoque['unidade'] == unidade_selecionada]
             
-            if produtos_faltantes:
-                if st.button(f"📥 Sincronizar {len(produtos_faltantes)} novos itens com {unidade_selecionada}"):
-                    novas_linhas = []
-                    for p in produtos_faltantes:
-                        novas_linhas.append({
-                            "unidade": unidade_selecionada,
-                            "nome": p,
-                            "quantidade": 0,
-                            "validade": "A definir",
-                            "minimo_alerta": 5
-                        })
-                    df_estoque = pd.concat([df_estoque, pd.DataFrame(novas_linhas)], ignore_index=True)
-                    conn.update(worksheet="estoque_pdv", data=df_estoque)
-                    st.success("Produtos sincronizados!")
-                    st.rerun()
-
-        # EXIBIÇÃO DA TABELA (Colunas: Nome, Quantidade, Validade)
-        if not df_local.empty:
-            st.write(f"### Detalhes de Estoque: {unidade_selecionada}")
-            
-            # Formatação para destacar estoque baixo
-            def colorir_estoque(s):
-                qtd = pd.to_numeric(s['quantidade'], errors='coerce') or 0
-                limite = pd.to_numeric(s['minimo_alerta'], errors='coerce') or 0
-                return ['background-color: #ffcccc' if qtd <= limite else '' for _ in s]
-
-            # Mostra exatamente o que você pediu: Validade e Quantidade Existente
-            st.dataframe(
-                df_local[["nome", "quantidade", "validade", "minimo_alerta"]].style.apply(colorir_estoque, axis=1),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.divider()
-            
-            # EDIÇÃO RÁPIDA
-            st.subheader("✏️ Atualizar Dados")
-            p_edit = st.selectbox("Selecione o produto:", [""] + df_local['nome'].tolist())
-            
-            if p_edit:
-                item = df_local[df_local['nome'] == p_edit].iloc[0]
-                with st.form("form_ajuste"):
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        n_qtd = st.number_input("Quantidade Existente", value=int(item['quantidade']))
-                    with c2:
-                        n_val = st.text_input("Validade (DD/MM/AAAA)", value=str(item['validade']))
-                    with c3:
-                        n_min = st.number_input("Mínimo para Alerta", value=int(item['minimo_alerta']))
-                    
-                    if st.form_submit_button("Salvar Alterações"):
-                        idx = df_estoque[(df_estoque['unidade'] == unidade_selecionada) & (df_estoque['nome'] == p_edit)].index[0]
-                        df_estoque.at[idx, 'quantidade'] = n_qtd
-                        df_estoque.at[idx, 'validade'] = n_val
-                        df_estoque.at[idx, 'minimo_alerta'] = n_min
-                        
+            # Sincronização
+            if df_geral is not None and 'nome' in df_geral.columns:
+                produtos_faltantes = [p for p in df_geral['nome'].tolist() if p not in df_local['nome'].tolist()]
+                
+                if produtos_faltantes:
+                    if st.button(f"📥 Sincronizar Itens com {unidade_selecionada}"):
+                        novas_linhas = []
+                        for p in produtos_faltantes:
+                            novas_linhas.append({
+                                "unidade": unidade_selecionada,
+                                "nome": p,
+                                "quantidade": 0,
+                                "validade": "A definir",
+                                "minimo_alerta": 5
+                            })
+                        df_estoque = pd.concat([df_estoque, pd.DataFrame(novas_linhas)], ignore_index=True)
                         conn.update(worksheet="estoque_pdv", data=df_estoque)
-                        st.success("Dados atualizados com sucesso!")
+                        st.success("Sincronizado!")
                         st.rerun()
+
+            if not df_local.empty:
+                st.write(f"### Detalhes: {unidade_selecionada}")
+                
+                # Mostra: Nome, Quantidade Existente e Validade
+                cols_mostrar = ["nome", "quantidade", "validade", "minimo_alerta"]
+                st.dataframe(df_local[cols_mostrar], use_container_width=True, hide_index=True)
+
+                st.divider()
+                st.subheader("✏️ Atualizar Dados")
+                p_edit = st.selectbox("Produto:", [""] + df_local['nome'].tolist())
+                
+                if p_edit:
+                    item = df_local[df_local['nome'] == p_edit].iloc[0]
+                    with st.form("form_edit"):
+                        c1, c2, c3 = st.columns(3)
+                        n_qtd = c1.number_input("Qtd Existente", value=int(item['quantidade']))
+                        n_val = c2.text_input("Validade", value=str(item['validade']))
+                        n_min = c3.number_input("Mínimo Alerta", value=int(item['minimo_alerta']))
+                        
+                        if st.form_submit_button("Salvar"):
+                            idx = df_estoque[(df_estoque['unidade'] == unidade_selecionada) & (df_estoque['nome'] == p_edit)].index[0]
+                            df_estoque.at[idx, 'quantidade'] = n_qtd
+                            df_estoque.at[idx, 'validade'] = n_val
+                            df_estoque.at[idx, 'minimo_alerta'] = n_min
+                            conn.update(worksheet="estoque_pdv", data=df_estoque)
+                            st.success("Salvo!")
+                            st.rerun()
         else:
-            st.info("Clique em sincronizar para carregar os produtos nesta unidade.")
-        
+            st.error("⚠️ Erro: A aba 'estoque_pdv' no Sheets precisa ter a coluna 'unidade'.")
 # --- GESTÃO DE DESPESAS ---
 elif menu == "💸 Despesas":
     st.header("💸 Gestão de Despesas")
