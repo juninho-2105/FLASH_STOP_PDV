@@ -233,23 +233,7 @@ elif menu == "🛒 Self-Checkout":
                     st.rerun()
 
         st.divider()
-
-    # 3. CARREGAMENTO E PREPARAÇÃO DOS PRODUTOS
-    df_p = carregar_dinamico("produtos")
-    
-    if df_p is not None and not df_p.empty:
-        col_ativa = 'preco_venda' if 'preco_venda' in df_p.columns else 'preco'
-        
-        st.subheader("🛍️ Adicionar Produto")
-        col_in, col_bt = st.columns([3, 1])
-        
-        with col_in:
-            p_selecionado = st.selectbox(
-                "Passe o produto no leitor ou digite o nome:", 
-                [""] + df_p['nome'].tolist(), 
-                key="input_checkout_v4"
-            )
-        
+       
 
         # 4. EXIBIÇÃO DO CARRINHO E TOTAL
         if st.session_state.carrinho:
