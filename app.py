@@ -84,6 +84,7 @@ if not st.session_state.autenticado:
                 else: st.error("Senha incorreta.")
             else: st.error("Usuário não encontrado.")
     st.stop()
+    
 # ==================== 3. MENU LATERAL ====================
 st.sidebar.title("⚡ Flash Stop")
 st.sidebar.write(f"📍 **{st.session_state.unidade}**")
