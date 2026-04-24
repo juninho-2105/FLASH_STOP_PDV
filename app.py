@@ -3,24 +3,19 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
-from streamlit_autorefresh import st_autorefresh 
+from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip install streamlit-autorefresh
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
 
-# HEARTBEAT: Atualiza a cada 5 min para manter o tablet ativo
+# --- NOVO: HEARTBEAT (Anti-inatividade) ---
+# Atualiza a página silenciosamente a cada 5 minutos para o tablet não desconectar
 st_autorefresh(interval=5 * 60 * 1000, key="heartbeat_flashstop")
 
-# CSS para botões e esconder elementos da interface
+# CSS para botões ultra-compactos e ajustes de interface
 st.markdown("""
     <style>
-    /* REMOVER BARRA 'HOSTED WITH STREAMLIT' E OUTROS MENUS */
-    [data-testid="stToolbar"], .stAppToolbar {display: none !important;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-
-    /* Estilo dos Botões */
+    /* Botões menores no checkout */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
@@ -31,6 +26,10 @@ st.markdown("""
         font-weight: bold !important;
         font-size: 18px !important;
     }
+    /* Esconder branding do Streamlit conforme solicitado */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -51,7 +50,8 @@ def carregar_dinamico(aba):
 
 # ==================== 2. SISTEMA DE LOGIN (URL + MANUAL) ====================
 
-# LÓGICA DE URL: .../?pdv=NOME&token=flash2026
+# --- NOVO: CAPTURA DE PARÂMETROS DA URL ---
+# Link de acesso direto: .../?pdv=NOME_DO_PDV&token=flash2026
 query_params = st.query_params
 TOKEN_MESTRE = "flash2026"
 
@@ -65,7 +65,7 @@ if not st.session_state.autenticado:
             })
             st.rerun()
 
-# LOGIN MANUAL
+# --- LOGIN MANUAL ---
 if not st.session_state.autenticado:
     st.title("⚡ Flash Stop - Acesso")
     with st.form("login_form"):
@@ -84,7 +84,6 @@ if not st.session_state.autenticado:
                 else: st.error("Senha incorreta.")
             else: st.error("Usuário não encontrado.")
     st.stop()
-
 # ==================== 3. MENU LATERAL ====================
 st.sidebar.title("⚡ Flash Stop")
 st.sidebar.write(f"📍 **{st.session_state.unidade}**")
