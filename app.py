@@ -7,23 +7,39 @@ from streamlit_autorefresh import st_autorefresh # Necessário instalar: pip ins
 
 # ==================== 1. CONFIGURAÇÕES DA PÁGINA ====================
 st.set_page_config(page_title="Flash Stop - Gestão", layout="wide", page_icon="⚡")
-# 2. COLOQUE O BLOCO AQUI (O "MAQUIADOR" DO APP)
+
 st.markdown("""
     <style>
-    /* Esconde a marca d'água 'Hosted with Streamlit' */
+    /* 1. Esconde apenas o texto 'Hosted with Streamlit' e o botão de Deploy */
     footer {visibility: hidden;}
-    
-    /* Esconde botões de deploy e menu sem quebrar o acesso lateral */
-    header {visibility: hidden;}
     .stAppDeployButton {display: none !important;}
+    
+    /* 2. Remove a barra superior mas mantém o botão do menu lateral visível */
+    header {
+        background-color: rgba(0,0,0,0) !important;
+        height: 3rem;
+    }
+    
+    /* 3. Ajusta o botão do menu lateral para ficar visível e acessível */
+    button[kind="headerNoContext"] {
+        visibility: visible !important;
+        z-index: 999;
+    }
+
+    /* 4. Remove ícones de status/loading que ficam no topo */
     [data-testid="stStatusWidget"] {display: none !important;}
 
-    /* Seus estilos de botões do PDV */
+    /* 5. Seus estilos de botões do PDV (Mantido) */
     .stButton>button {
         border-radius: 6px;
         padding: 2px 5px;
     }
-    /* ... o restante do seu CSS atual ... */
+    div[data-testid="column"] button {
+        height: 32px !important;
+        width: 32px !important;
+        font-weight: bold !important;
+        font-size: 18px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
